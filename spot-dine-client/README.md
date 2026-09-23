@@ -33,7 +33,7 @@ Ensure you have **Node.js** (v18 or higher) and **npm** installed.
 
 1. Clone the repository:
    ```bash
-   git clone 
+   git clone https://github.com/Royakash2/spot-dine.git
    cd spotdine-frontend
    ```
 
