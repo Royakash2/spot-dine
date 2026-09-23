@@ -1,6 +1,7 @@
 import hero_bg_img from "./hero_bg_img.png";
 import default_restaurant_img from "./default_restaurant_Img.jpeg";
 import membership_section_img from "./membership_section_img.png";
+import hero_bg_two from "./hero-bg-two.jpg";
 import {
     BeefIcon,
     Building2Icon,
@@ -14,6 +15,7 @@ import {
 } from "lucide-react";
 
 export const assets = {
+    hero_bg_two,
     hero_bg_img,
     default_restaurant_img,
     membership_section_img,
