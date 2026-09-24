@@ -38,7 +38,7 @@ export default function Navbar() {
 
     return (
         <nav
-            className={`fixed top-0 w-full z-40 transition-all duration-300 ${scrolled ? "bg-white/95 backdrop-blur-md h-16 shadow-sm border-b border-outline-variant/10" : "bg-transparent h-20 border-b border-transparent"}`}
+            className={`fixed top-0 w-full z-40 transition-all duration-300 ${scrolled ? "bg-white/95 backdrop-blur-md h-16  border-b border-outline-variant/10" : "bg-transparent h-20 border-b border-transparent"}`}
         >
             <div className="max-w-7xl mx-auto flex justify-between items-center h-full px-6 md:px-10">
                 {/* Logo */}
