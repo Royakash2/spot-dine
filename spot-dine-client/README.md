@@ -48,7 +48,7 @@ Ensure you have **Node.js** (v18 or higher) and **npm** installed.
    VITE_API_URL=http://localhost:5000/api
    ```
 
-### Development Server
+### Development Server*96
 
 Run the development server locally:
 ```bash
