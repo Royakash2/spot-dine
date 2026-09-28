@@ -2,25 +2,16 @@ import { useState, useEffect } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { useAppContext } from "../context/AppContext.tsx";
 import { Menu, X, LogOut, LayoutDashboard, ShieldCheck } from "lucide-react";
+import { useScroll } from "../hooks/useScroll";
 
 export default function Navbar() {
     const { user, logout, setAuthModalOpen } = useAppContext();
-    const [scrolled, setScrolled] = useState(false);
+    const scrolled = useScroll(30);
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
     const [dropdownOpen, setDropdownOpen] = useState(false);
 
     const navigate = useNavigate();
     const location = useLocation();
-
-    useEffect(() => {
-        const handleScroll = () => {
-            if (window.scrollY > 30) setScrolled(true);
-            else setScrolled(false);
-        };
-
-        window.addEventListener("scroll", handleScroll);
-        return () => window.removeEventListener("scroll", handleScroll);
-    }, []);
 
     // Close mobile menu and dropdowns when location changes
     useEffect(() => {
