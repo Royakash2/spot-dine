@@ -2,6 +2,12 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Search, MapPin, Calendar, Users } from "lucide-react";
 import { assets } from "../../assets/assets";
+import { Swiper, SwiperSlide } from "swiper/react";
+import { Autoplay, EffectFade } from "swiper/modules";
+
+// Swiper styles
+import "swiper/css";
+import "swiper/css/effect-fade";
 
 export default function Hero() {
     const navigate = useNavigate();
@@ -25,10 +31,23 @@ export default function Hero() {
 
     return (
         <section className="relative min-h-screen flex items-center justify-center overflow-hidden">
-            {/* Background Image */}
+            {/* Background Image Slider */}
             <div className="absolute inset-0 z-0">
-                <img alt="Elegant Dining Room" className="w-full h-full object-cover brightness-70" src={assets.hero_bg_two} />
-                <div className="absolute inset-0 bg-black/30"></div>
+                <Swiper
+                    modules={[Autoplay, EffectFade]}
+                    effect="fade"
+                    autoplay={{ delay: 5000, disableOnInteraction: false }}
+                    loop={true}
+                    allowTouchMove={false}
+                    className="w-full h-full"
+                >
+                    {[assets.hero_bg_two, assets.hero_bg_img, assets.default_restaurant_img].map((imgSrc, index) => (
+                        <SwiperSlide key={index}>
+                            <img alt={`Elegant Dining ${index + 1}`} className="w-full h-full object-cover brightness-70" src={imgSrc} />
+                        </SwiperSlide>
+                    ))}
+                </Swiper>
+                <div className="absolute inset-0 bg-black/40 z-10 pointer-events-none"></div>
             </div>
 
             {/* Content */}
