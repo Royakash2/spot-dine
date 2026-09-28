@@ -36,6 +36,22 @@ export default function Navbar() {
         }
     };
 
+    const navLinks = [
+        { name: "Discover", path: "/", isButton: false, isActive: location.pathname === "/" },
+        { name: "Restaurants", path: "/search", isButton: false, isActive: location.pathname.startsWith("/search") },
+        { name: "My Bookings", isButton: true, action: handleDashboardClick, isActive: location.pathname === "/dashboard" },
+    ];
+
+    const getLinkClasses = (isActive: boolean) => {
+        const baseClasses = "text-sm transition-colors pb-1 border-b-2 cursor-pointer";
+        const isHomePageAndNotScrolled = location.pathname === "/" && !scrolled;
+        
+        if (isActive) {
+            return `${baseClasses} ${isHomePageAndNotScrolled ? "text-white border-white" : "text-secondary border-secondary"}`;
+        }
+        return `${baseClasses} border-transparent ${isHomePageAndNotScrolled ? "text-white/80 hover:text-white" : "text-black/55 hover:text-primary"}`;
+    };
+
     return (
         <nav
             className={`fixed top-0 w-full z-40 transition-all duration-300 ${scrolled ? "bg-white/95 backdrop-blur-md h-16  border-b border-outline-variant/30" : "bg-transparent h-20 border-b border-transparent"}`}
@@ -49,24 +65,25 @@ export default function Navbar() {
 
                     {/* Desktop Navigation Links */}
                     <div className="hidden md:flex gap-8 items-center">
-                        <Link
-                            to="/"
-                            className={`text-sm transition-colors pb-1 border-b-2 cursor-pointer ${location.pathname === "/" ? (scrolled ? "text-secondary border-secondary" : "text-white border-white") : "text-black/55 hover:text-primary border-transparent"}`}
-                        >
-                            Discover
-                        </Link>
-                        <Link
-                            to="/search"
-                            className={`text-sm transition-colors pb-1 border-b-2 border-transparent cursor-pointer ${location.pathname.startsWith("/search") ? "text-secondary border-secondary" : scrolled || location.pathname !== "/" ? "text-black/55 hover:text-primary" : "text-white/80 hover:text-white"}}`}
-                        >
-                            Restaurants
-                        </Link>
-                        <button
-                            onClick={handleDashboardClick}
-                            className={`text-sm transition-colors pb-1 border-b-2 border-transparent cursor-pointer text-left ${location.pathname === "/dashboard" ? "text-secondary border-secondary" : scrolled || location.pathname !== "/" ? "text-black/55 hover:text-primary" : "text-white/80 hover:text-white"}`}
-                        >
-                            My Bookings
-                        </button>
+                        {navLinks.map((link, index) =>
+                            link.isButton ? (
+                                <button
+                                    key={index}
+                                    onClick={link.action}
+                                    className={`${getLinkClasses(link.isActive)} text-left`}
+                                >
+                                    {link.name}
+                                </button>
+                            ) : (
+                                <Link
+                                    key={index}
+                                    to={link.path!}
+                                    className={getLinkClasses(link.isActive)}
+                                >
+                                    {link.name}
+                                </Link>
+                            )
+                        )}
                     </div>
                 </div>
 
@@ -161,18 +178,25 @@ export default function Navbar() {
             {/* Mobile Menu Drawer */}
             {mobileMenuOpen && (
                 <div className="md:hidden fixed inset-x-0 top-16 bg-white border-b border-outline-variant/20 py-6 px-6 z-50 ambient-shadow flex flex-col gap-5 animate-in slide-in-from-top duration-300">
-                    <Link to="/" className="text-base text-on-surface hover:text-primary">
-                        Discover
-                    </Link>
-                    <Link to="/search" className="text-base text-on-surface hover:text-primary">
-                        Restaurants
-                    </Link>
-                    <button
-                        onClick={handleDashboardClick}
-                        className="text-base text-on-surface hover:text-primary text-left cursor-pointer"
-                    >
-                        Reservations
-                    </button>
+                    {navLinks.map((link, index) =>
+                        link.isButton ? (
+                            <button
+                                key={index}
+                                onClick={link.action}
+                                className={`text-base text-left cursor-pointer transition-colors ${link.isActive ? "text-primary font-medium" : "text-on-surface hover:text-primary"}`}
+                            >
+                                {link.name}
+                            </button>
+                        ) : (
+                            <Link
+                                key={index}
+                                to={link.path!}
+                                className={`text-base transition-colors ${link.isActive ? "text-primary font-medium" : "text-on-surface hover:text-primary"}`}
+                            >
+                                {link.name}
+                            </Link>
+                        )
+                    )}
 
                     <div className="border-t border-outline-variant/10 my-2"></div>
 
