@@ -68,7 +68,7 @@ export default function TestimonialsSection() {
                                 </div>
 
                                 {/* Comment */}
-                                <p className="text-sm text-black/70 leading-relaxed flex-1 italic">
+                                <p className="text-sm text-black/70 leading-relaxed flex-1">
                                     "{review.comment}"
                                 </p>
 
