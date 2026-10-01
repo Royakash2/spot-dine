@@ -2,11 +2,9 @@ import { useState, useEffect } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { useAppContext } from "../context/AppContext.tsx";
 import { Menu, X, LogOut, LayoutDashboard, ShieldCheck } from "lucide-react";
-import { useScroll } from "../hooks/useScroll";
 
 export default function Navbar() {
     const { user, logout, setAuthModalOpen } = useAppContext();
-    const scrolled = useScroll(30);
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
     const [dropdownOpen, setDropdownOpen] = useState(false);
 
@@ -35,23 +33,21 @@ export default function Navbar() {
 
     const getLinkClasses = (isActive: boolean) => {
         const baseClasses = "text-sm transition-colors pb-1 border-b-2 cursor-pointer";
-        const isHomePageAndNotScrolled = location.pathname === "/" && !scrolled;
-        
         if (isActive) {
-            return `${baseClasses} ${isHomePageAndNotScrolled ? "text-white border-white" : "text-secondary border-secondary"}`;
+            return `${baseClasses} text-secondary border-secondary`;
         }
-        return `${baseClasses} border-transparent ${isHomePageAndNotScrolled ? "text-white/80 hover:text-white" : "text-black/55 hover:text-primary"}`;
+        return `${baseClasses} border-transparent text-black/55 hover:text-primary`;
     };
 
     return (
         <nav
-            className={`fixed top-0 w-full z-40 transition-all duration-300 ${scrolled ? "bg-white/95 backdrop-blur-md h-20  border-b border-outline-variant/30" : "bg-transparent h-20 border-b border-transparent"}`}
+            className="sticky top-0 w-full z-40 bg-white/95 backdrop-blur-md h-16 border-b border-outline-variant/30"
         >
             <div className="max-w-7xl mx-auto flex justify-between items-center h-full px-6 md:px-10">
                 {/* Logo */}
                 <div className="flex items-center gap-12">
                     <Link to="/">
-                        <img src="/logo.svg" alt="Logo" className={`h-8.5 ${scrolled || (location.pathname === "/" && "invert")}`} />
+                        <img src="/logo.svg" alt="Logo" className="h-8.5" />
                     </Link>
 
                     {/* Desktop Navigation Links */}
@@ -84,7 +80,7 @@ export default function Navbar() {
                         <div className="relative">
                             <button
                                 onClick={() => setDropdownOpen(!dropdownOpen)}
-                                className={`flex items-center gap-2 text-sm transition-colors cursor-pointer ${scrolled || location.pathname !== "/" ? "text-secondary" : "text-white"}`}
+                                className="flex items-center gap-2 text-sm transition-colors cursor-pointer text-secondary"
                             >
                                 <span className="size-7 rounded-full bg-secondary/20 border flex items-center justify-center text-xs uppercase">
                                     {user.name.charAt(0)}
@@ -140,13 +136,13 @@ export default function Navbar() {
                         <>
                             <button
                                 onClick={() => setAuthModalOpen(true)}
-                                className={`text-sm transition-colors cursor-pointer ${scrolled || location.pathname !== "/" ? "text-black/55 hover:text-primary" : "text-white/80 hover:text-white"}`}
+                                className="text-sm transition-colors cursor-pointer text-black/55 hover:text-primary"
                             >
                                 Sign In
                             </button>
                             <button
                                 onClick={() => setAuthModalOpen(true)}
-                                className={`text-xs font-medium tracking-wider uppercase px-5 py-2.5 transition-soft cursor-pointer ${scrolled || location.pathname !== "/" ? "bg-primary text-white hover:bg-secondary hover:text-white" : "bg-white text-primary hover:bg-secondary hover:text-white"}`}
+                                className="text-xs font-medium tracking-wider uppercase px-5 py-2.5 transition-soft cursor-pointer bg-primary text-white hover:bg-secondary hover:text-white"
                             >
                                 Sign Up
                             </button>
@@ -158,7 +154,7 @@ export default function Navbar() {
                 <div className="flex items-center md:hidden">
                     <button
                         onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-                        className={`p-2 transition-colors cursor-pointer ${scrolled || location.pathname !== "/" ? "text-primary" : "text-white"}`}
+                        className="p-2 transition-colors cursor-pointer text-primary"
                         aria-label="Toggle Menu"
                     >
                         {mobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
