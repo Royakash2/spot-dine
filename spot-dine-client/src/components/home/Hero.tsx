@@ -31,7 +31,7 @@ export default function Hero() {
 
     return (
         <section className="relative md:h-[500px] flex flex-col">
-            {/* Background Image Slider — full viewport width, no max-w constraint */}
+            {/* Background Image Slider  */}
             <div className="absolute inset-0 z-0">
                 <Swiper
                     modules={[Autoplay, EffectFade]}
