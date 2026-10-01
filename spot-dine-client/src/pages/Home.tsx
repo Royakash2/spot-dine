@@ -29,7 +29,9 @@ export default function Home() {
             <AuthModal />
             <main className="flex-1">
                 <Hero />
-                <CuisineBrowse />
+                <div className="pt-4 md:pt-16">
+                    <CuisineBrowse />
+                </div>
                 <TrendingRow trending={trending} loading={loading} />
                 <TestimonialsSection />
                 <MembershipSection />
