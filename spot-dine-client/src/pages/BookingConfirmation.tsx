@@ -96,7 +96,7 @@ export default function BookingConfirmation() {
     }
 
     return (
-        <div className="min-h-screen bg-surface flex flex-col pt-20">
+        <div className="min-h-screen bg-surface flex flex-col">
             <Navbar />
 
             {/* Main Booking Content */}

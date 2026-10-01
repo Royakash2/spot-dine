@@ -106,7 +106,7 @@ export default function Search() {
     const cuisineOptions = ["Italian", "French", "Japanese", "Steakhouse", "Vegetarian"];
 
     return (
-        <div className="min-h-screen bg-surface flex flex-col pt-20">
+        <div className="min-h-screen bg-surface flex flex-col">
             <Navbar />
             <AuthModal />
 
