@@ -43,7 +43,7 @@ export default function AdminDashboard() {
     const otherRestaurants = restaurants.filter((r) => r.status !== "pending");
 
     return (
-        <div className="min-h-screen bg-surface flex flex-col pt-20">
+        <div className="min-h-screen bg-surface flex flex-col">
             <Navbar />
 
             <main className="grow max-w-7xl w-full mx-auto px-6 md:px-10 py-12">

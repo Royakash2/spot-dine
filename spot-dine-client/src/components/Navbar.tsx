@@ -5,22 +5,11 @@ import { Menu, X, LogOut, LayoutDashboard, ShieldCheck } from "lucide-react";
 
 export default function Navbar() {
     const { user, logout, setAuthModalOpen } = useAppContext();
-    const [scrolled, setScrolled] = useState(false);
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
     const [dropdownOpen, setDropdownOpen] = useState(false);
 
     const navigate = useNavigate();
     const location = useLocation();
-
-    useEffect(() => {
-        const handleScroll = () => {
-            if (window.scrollY > 30) setScrolled(true);
-            else setScrolled(false);
-        };
-
-        window.addEventListener("scroll", handleScroll);
-        return () => window.removeEventListener("scroll", handleScroll);
-    }, []);
 
     // Close mobile menu and dropdowns when location changes
     useEffect(() => {
@@ -36,37 +25,52 @@ export default function Navbar() {
         }
     };
 
+    const navLinks = [
+        { name: "Discover", path: "/", isButton: false, isActive: location.pathname === "/" },
+        { name: "Restaurants", path: "/search", isButton: false, isActive: location.pathname.startsWith("/search") },
+        { name: "My Bookings", isButton: true, action: handleDashboardClick, isActive: location.pathname === "/dashboard" },
+    ];
+
+    const getLinkClasses = (isActive: boolean) => {
+        const baseClasses = "text-sm transition-colors pb-1 border-b-2 cursor-pointer";
+        if (isActive) {
+            return `${baseClasses} text-secondary border-secondary`;
+        }
+        return `${baseClasses} border-transparent text-black/55 hover:text-primary`;
+    };
+
     return (
         <nav
-            className={`fixed top-0 w-full z-40 transition-all duration-300 ${scrolled ? "bg-white/95 backdrop-blur-md h-16  border-b border-outline-variant/30" : "bg-transparent h-20 border-b border-transparent"}`}
+            className="sticky top-0 w-full z-40 bg-white/95 backdrop-blur-md h-16 border-b border-outline-variant/30"
         >
             <div className="max-w-7xl mx-auto flex justify-between items-center h-full px-6 md:px-10">
                 {/* Logo */}
                 <div className="flex items-center gap-12">
                     <Link to="/">
-                        <img src="/logo.svg" alt="Logo" className={`h-8.5 ${scrolled || (location.pathname === "/" && "invert")}`} />
+                        <img src="/logo.svg" alt="Logo" className="h-8.5" />
                     </Link>
 
                     {/* Desktop Navigation Links */}
                     <div className="hidden md:flex gap-8 items-center">
-                        <Link
-                            to="/"
-                            className={`text-sm transition-colors pb-1 border-b-2 cursor-pointer ${location.pathname === "/" ? (scrolled ? "text-secondary border-secondary" : "text-white border-white") : "text-black/55 hover:text-primary border-transparent"}`}
-                        >
-                            Discover
-                        </Link>
-                        <Link
-                            to="/search"
-                            className={`text-sm transition-colors pb-1 border-b-2 border-transparent cursor-pointer ${location.pathname.startsWith("/search") ? "text-secondary border-secondary" : scrolled || location.pathname !== "/" ? "text-black/55 hover:text-primary" : "text-white/80 hover:text-white"}}`}
-                        >
-                            Restaurants
-                        </Link>
-                        <button
-                            onClick={handleDashboardClick}
-                            className={`text-sm transition-colors pb-1 border-b-2 border-transparent cursor-pointer text-left ${location.pathname === "/dashboard" ? "text-secondary border-secondary" : scrolled || location.pathname !== "/" ? "text-black/55 hover:text-primary" : "text-white/80 hover:text-white"}`}
-                        >
-                            My Bookings
-                        </button>
+                        {navLinks.map((link, index) =>
+                            link.isButton ? (
+                                <button
+                                    key={index}
+                                    onClick={link.action}
+                                    className={`${getLinkClasses(link.isActive)} text-left`}
+                                >
+                                    {link.name}
+                                </button>
+                            ) : (
+                                <Link
+                                    key={index}
+                                    to={link.path!}
+                                    className={getLinkClasses(link.isActive)}
+                                >
+                                    {link.name}
+                                </Link>
+                            )
+                        )}
                     </div>
                 </div>
 
@@ -76,7 +80,7 @@ export default function Navbar() {
                         <div className="relative">
                             <button
                                 onClick={() => setDropdownOpen(!dropdownOpen)}
-                                className={`flex items-center gap-2 text-sm transition-colors cursor-pointer ${scrolled || location.pathname !== "/" ? "text-secondary" : "text-white"}`}
+                                className="flex items-center gap-2 text-sm transition-colors cursor-pointer text-secondary"
                             >
                                 <span className="size-7 rounded-full bg-secondary/20 border flex items-center justify-center text-xs uppercase">
                                     {user.name.charAt(0)}
@@ -132,13 +136,13 @@ export default function Navbar() {
                         <>
                             <button
                                 onClick={() => setAuthModalOpen(true)}
-                                className={`text-sm transition-colors cursor-pointer ${scrolled || location.pathname !== "/" ? "text-black/55 hover:text-primary" : "text-white/80 hover:text-white"}`}
+                                className="text-sm transition-colors cursor-pointer text-black/55 hover:text-primary"
                             >
                                 Sign In
                             </button>
                             <button
                                 onClick={() => setAuthModalOpen(true)}
-                                className={`text-xs font-medium tracking-wider uppercase px-5 py-2.5 transition-soft cursor-pointer ${scrolled || location.pathname !== "/" ? "bg-primary text-white hover:bg-primary-container hover:text-secondary" : "bg-white text-primary hover:bg-secondary hover:text-white"}`}
+                                className="text-xs font-medium tracking-wider uppercase px-5 py-2.5 transition-soft cursor-pointer bg-primary text-white hover:bg-secondary hover:text-white"
                             >
                                 Sign Up
                             </button>
@@ -150,7 +154,7 @@ export default function Navbar() {
                 <div className="flex items-center md:hidden">
                     <button
                         onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-                        className={`p-2 transition-colors cursor-pointer ${scrolled || location.pathname !== "/" ? "text-primary" : "text-white"}`}
+                        className="p-2 transition-colors cursor-pointer text-primary"
                         aria-label="Toggle Menu"
                     >
                         {mobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
@@ -161,18 +165,25 @@ export default function Navbar() {
             {/* Mobile Menu Drawer */}
             {mobileMenuOpen && (
                 <div className="md:hidden fixed inset-x-0 top-16 bg-white border-b border-outline-variant/20 py-6 px-6 z-50 ambient-shadow flex flex-col gap-5 animate-in slide-in-from-top duration-300">
-                    <Link to="/" className="text-base text-on-surface hover:text-primary">
-                        Discover
-                    </Link>
-                    <Link to="/search" className="text-base text-on-surface hover:text-primary">
-                        Restaurants
-                    </Link>
-                    <button
-                        onClick={handleDashboardClick}
-                        className="text-base text-on-surface hover:text-primary text-left cursor-pointer"
-                    >
-                        Reservations
-                    </button>
+                    {navLinks.map((link, index) =>
+                        link.isButton ? (
+                            <button
+                                key={index}
+                                onClick={link.action}
+                                className={`text-base text-left cursor-pointer transition-colors ${link.isActive ? "text-primary font-medium" : "text-on-surface hover:text-primary"}`}
+                            >
+                                {link.name}
+                            </button>
+                        ) : (
+                            <Link
+                                key={index}
+                                to={link.path!}
+                                className={`text-base transition-colors ${link.isActive ? "text-primary font-medium" : "text-on-surface hover:text-primary"}`}
+                            >
+                                {link.name}
+                            </Link>
+                        )
+                    )}
 
                     <div className="border-t border-outline-variant/10 my-2"></div>
 

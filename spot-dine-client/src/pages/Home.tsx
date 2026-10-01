@@ -6,6 +6,7 @@ import AuthModal from "../components/AuthModal.tsx";
 import Hero from "../components/home/Hero.tsx";
 import CuisineBrowse from "../components/home/CuisineBrowse.tsx";
 import TrendingRow from "../components/home/TrendingRow.tsx";
+import TestimonialsSection from "../components/home/TestimonialsSection.tsx";
 import MembershipSection from "../components/home/MembershipSection.tsx";
 import NewsletterCTA from "../components/home/NewsletterCTA.tsx";
 import { dummyFeaturedRestaurants } from "../assets/assets.ts";
@@ -28,8 +29,11 @@ export default function Home() {
             <AuthModal />
             <main className="flex-1">
                 <Hero />
-                <CuisineBrowse />
+                <div className="pt-4 md:pt-16">
+                    <CuisineBrowse />
+                </div>
                 <TrendingRow trending={trending} loading={loading} />
+                <TestimonialsSection />
                 <MembershipSection />
                 <NewsletterCTA />
             </main>
