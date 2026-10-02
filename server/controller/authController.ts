@@ -1,4 +1,11 @@
 import type { Request, Response } from "express";
+import jwt from "jsonwebtoken";
+
+// healper to ganarete token
+
+const generateToken = async(id: string) => {
+    return jwt.sign({id}, process.env.JWT_SECRET!, {expiresIn: "30d"});
+}
 
 // Create a new user account
 // POST /api/auth/register
