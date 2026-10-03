@@ -2,9 +2,8 @@ import type { Request, Response } from "express";
 import jwt from "jsonwebtoken";
 
 // healper to ganarete token
-
 const generateToken = async(id: string) => {
-    return jwt.sign({id}, process.env.JWT_SECRET!, {expiresIn: "30d"});
+    return jwt.sign({id}, process.env.JWT_SECRET as string, {expiresIn: "30d"});
 }
 
 // Create a new user account
@@ -15,6 +14,8 @@ const registerUser = async(req:Request, res:Response) : Promise<void> => {
         
     } catch (error) {
         
+
+
     }
 }
 
