@@ -100,5 +100,14 @@ const loginUser = async (req: Request, res: Response): Promise<void> => {
 // @access Private
 const getMe = async (req: Request, res: Response): Promise<void> => {
   try {
-  } catch (error) {}
+    const user = await User.findById(req.user?.id).select("-password");
+    if (!user) {
+      res.status(404).json({ message: "User not found" });
+      return;
+    }
+    res.status(200).json(user);
+  } catch (error: any) {
+    console.error("Error in getMe:", error);
+    res.status(500).json({ message: "Internal server error" });
+  }
 };
