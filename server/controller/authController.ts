@@ -2,6 +2,7 @@ import type { Request, Response } from "express";
 import jwt from "jsonwebtoken";
 import { User } from "../models/User.js";
 import bcrypt from "bcrypt";
+import type { AuthRequest } from "../middlewares/auth.js";
 
 // healper to ganarete token
 const generateToken = async (id: string) => {
@@ -63,51 +64,54 @@ const registerUser = async (req: Request, res: Response): Promise<void> => {
 // POST /api/auth/login
 const loginUser = async (req: Request, res: Response): Promise<void> => {
   try {
-    const {email,password} = req.body;
-    if(!email ||!password){
-      res.status(400).json({message: "Please enter all required fields"});
+    const { email, password } = req.body;
+    if (!email || !password) {
+      res.status(400).json({ message: "Please enter all required fields" });
       return;
     }
-     const user = await User.findOne({email});
-     if(!user){
-        res.status(401).json({message: "invalid email or password"})
-        return;
-     }
+    // check for user
+    const user = await User.findOne({ email });
+    if (!user) {
+      res.status(401).json({ message: "invalid email or password" });
+      return;
+    }
 
-     const comparePassword = await  bcrypt.compare(password, user.password);
-      if (!comparePassword){
-        res.status(401).json({message: "Invalid email or password"})
-        return;
-      }
-      res.status(200).json({
-        _id: user._id,
-        name: user.name,
-        email: user.email,
-        phone: user.phone,
-        role: user.role,
-        token: generateToken(user._id.toString()),
-      });
-
-
+    //  check if password match from hashed password
+    const comparePassword = await bcrypt.compare(password, user.password || "");
+    if (!comparePassword) {
+      res.status(401).json({ message: "Invalid email or password" });
+      return;
+    }
+    res.status(200).json({
+      _id: user._id,
+      name: user.name,
+      email: user.email,
+      phone: user.phone,
+      role: user.role,
+      token: generateToken(user._id.toString()),
+    });
   } catch (error: any) {
     console.error("Error in loginUser:", error);
-    res.status(500).json({ message: "Internal server error" });
+    res.status(500).json({ message: error.message });
   }
 };
 
 // Fetch current logged-in user data
 // GET /api/auth/me
 // @access Private
-const getMe = async (req: Request, res: Response): Promise<void> => {
+const getMe = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const user = await User.findById(req.user?.id).select("-password");
-    if (!user) {
-      res.status(404).json({ message: "User not found" });
+    if (!req.user) {
+      res.status(401).json({ message: "User not found" });
       return;
     }
-    res.status(200).json(user);
+    res.json({user:req.user});
   } catch (error: any) {
     console.error("Error in getMe:", error);
-    res.status(500).json({ message: "Internal server error" });
+    res.status(500).json({ message: error.message });
   }
+};
+
+export {
+   registerUser , loginUser , getMe
 };
