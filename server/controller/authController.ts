@@ -5,7 +5,7 @@ import bcrypt from "bcrypt";
 import type { AuthRequest } from "../middlewares/auth.js";
 
 // healper to ganarete token
-const generateToken = async (id: string) => {
+const generateToken = (id: string) => {
   return jwt.sign({ id }, process.env.JWT_SECRET as string, {
     expiresIn: "30d",
   });
@@ -44,6 +44,7 @@ const registerUser = async (req: Request, res: Response): Promise<void> => {
 
     if (user) {
       res.status(201).json({
+        message: "User created successfully",
         _id: user._id,
         name: user.name,
         email: user.email,
@@ -83,6 +84,7 @@ const loginUser = async (req: Request, res: Response): Promise<void> => {
       return;
     }
     res.status(200).json({
+      message: "User logged in successfully",
       _id: user._id,
       name: user.name,
       email: user.email,
