@@ -41,7 +41,7 @@ export default function Navbar() {
 
     return (
         <nav
-            className="sticky top-0 w-full z-40 bg-white/95 backdrop-blur-md h-16 border-b border-outline-variant/30"
+            className="sticky top-0 w-full z-40 bg-[#F9F9F9] backdrop-blur-md h-16 "
         >
             <div className="max-w-7xl mx-auto flex justify-between items-center h-full px-6 md:px-10">
                 {/* Logo */}
