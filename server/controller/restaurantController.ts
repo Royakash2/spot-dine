@@ -34,7 +34,7 @@ export const getRestaurantBySlug = async (
     res.status(400).json({ message: error.message });
   }
 };
-export const getRestaurantAvailabity = async (
+export const getRestaurantAvailability = async (
   req: Request,
   res: Response,
 ): Promise<void> => {
