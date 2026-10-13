@@ -83,14 +83,40 @@ export const getFeaturedRestaurant = async (
     res.status(500).json({ message: error.message || "Server Error" });
   }
 };
+// get a single restaurant by its slug
+// GET /api/restaurants/:slug
+// @access Public
 export const getRestaurantBySlug = async (
   req: Request,
   res: Response,
 ): Promise<void> => {
   try {
+    const { slug } = req.params;
+
+    // Guard: ensure slug is a plain string (req.params can be string | string[] | undefined)
+    if (!slug || typeof slug !== "string") {
+      res.status(400).json({ message: "Invalid restaurant slug" });
+      return;
+    }
+
+    const restaurant = await Restaurant.findOne({
+      slug: slug,          // now TypeScript knows for sure it's a string
+      status: "approved",
+    }).populate("owner", "name email"); // attach owner name & email
+
+    // if no restaurant found with that slug, return 404
+    if (!restaurant) {
+      res.status(404).json({ message: "Restaurant not found" });
+      return;
+    }
+
+    res.status(200).json({
+      success: true,
+      restaurant,
+    });
   } catch (error: any) {
-    console.error(error);
-    res.status(400).json({ message: error.message });
+    console.error("Error in getRestaurantBySlug:", error);
+    res.status(500).json({ message: error.message || "Server Error" });
   }
 };
 export const getRestaurantAvailability = async (
