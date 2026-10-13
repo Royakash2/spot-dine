@@ -58,14 +58,29 @@ export const getRestaurant = async (
     res.status(500).json({ message: error.message || "Server Error" });
   }
 };
+// get featured restaurants for homepage / dashboard
+// GET /api/restaurants/featured
+// @access Public
 export const getFeaturedRestaurant = async (
   req: Request,
   res: Response,
 ): Promise<void> => {
   try {
+    const restaurants = await Restaurant.find({
+      status: "approved",
+      featured: true,
+    })
+      .sort({ rating: -1 }) // highest rated first
+      .limit(6);            // only show top 6 on the homepage
+
+    res.status(200).json({
+      success: true,
+      count: restaurants.length,
+      restaurants,
+    });
   } catch (error: any) {
-    console.error(error);
-    res.status(400).json({ message: error.message });
+    console.error("Error in getFeaturedRestaurant:", error);
+    res.status(500).json({ message: error.message || "Server Error" });
   }
 };
 export const getRestaurantBySlug = async (
