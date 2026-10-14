@@ -119,13 +119,60 @@ export const getRestaurantBySlug = async (
     res.status(500).json({ message: error.message || "Server Error" });
   }
 };
+// get time slot availability for a restaurant on a specific date
+// GET /api/restaurants/:id/availability?date=2026-10-15&guests=2
+// @access Public
 export const getRestaurantAvailability = async (
   req: Request,
   res: Response,
 ): Promise<void> => {
   try {
+    const { id } = req.params;
+    const { date, guests } = req.query;
+
+    // --- 1. Validate inputs ---
+    if (!id || typeof id !== "string") {
+      res.status(400).json({ message: "Invalid restaurant ID" });
+      return;
+    }
+
+    if (!date || typeof date !== "string") {
+      res.status(400).json({ message: "date query param is required (e.g. ?date=2026-10-15)" });
+      return;
+    }
+
+    const guestCount = parseInt(guests as string) || 1;
+
+    // --- 2. Find the restaurant ---
+    const restaurant = await Restaurant.findById(id);
+    if (!restaurant) {
+      res.status(404).json({ message: "Restaurant not found" });
+      return;
+    }
+
+    // --- 3. Build start & end of the requested date (full day range) ---
+    const dayStart = new Date(date);
+    dayStart.setUTCHours(0, 0, 0, 0);
+    const dayEnd = new Date(date);
+    dayEnd.setUTCHours(23, 59, 59, 999);
+
+    // --- 4. For each available slot, compute how many seats are already booked ---
+    // (We'll wire up real Booking queries once the Booking model exists)
+    // For now: all slots are open with full totalSeats capacity
+    const slots = restaurant.availableSlots.map((time) => ({
+      time,
+      availableSeats: restaurant.totalSeats,
+      isAvailable: restaurant.totalSeats >= guestCount,
+    }));
+
+    res.status(200).json({
+      success: true,
+      date,
+      totalSeats: restaurant.totalSeats,
+      slots,
+    });
   } catch (error: any) {
-    console.error(error);
-    res.status(400).json({ message: error.message });
+    console.error("Error in getRestaurantAvailability:", error);
+    res.status(500).json({ message: error.message || "Server Error" });
   }
 };
