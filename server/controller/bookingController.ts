@@ -109,3 +109,33 @@ export const createBooking = async (
   }
 };
 
+// @desc  Get all bookings for the logged-in user
+// GET /api/bookings/my
+// @access Private
+export const getUserBookings = async (
+  req: AuthRequest,
+  res: Response,
+): Promise<void> => {
+  try {
+    if (!req.user) {
+      res.status(401).json({ message: "Not authorised" });
+      return;
+    }
+    const userId = req.user._id;
+
+    const bookings = await Booking.find({ user: userId })
+      .populate("restaurant", "name slug location image cuisine")
+      .sort({ date: -1 }); // most recent first
+
+    res.status(200).json({
+      success: true,
+      count: bookings.length,
+      bookings,
+    });
+  } catch (error: any) {
+    console.error("Error in getUserBookings:", error);
+    res.status(500).json({ message: error.message || "Server Error" });
+  }
+};
+
+
