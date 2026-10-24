@@ -138,4 +138,53 @@ export const getUserBookings = async (
   }
 };
 
+// @desc  Cancel a booking (soft-cancel — sets status to "cancelled")
+// PATCH /api/bookings/:id/cancel
+// @access Private
+export const cancelBooking = async (
+  req: AuthRequest,
+  res: Response,
+): Promise<void> => {
+  try {
+    const { id } = req.params;
+
+    if (!req.user) {
+      res.status(401).json({ message: "Not authorised" });
+      return;
+    }
+    const userId = req.user._id;
+
+    const booking = await Booking.findById(id);
+
+    if (!booking) {
+      res.status(404).json({ message: "Booking not found" });
+      return;
+    }
+
+    // Only the booking owner can cancel it
+    if (booking.user.toString() !== userId.toString()) {
+      res.status(403).json({ message: "Not authorised to cancel this booking" });
+      return;
+    }
+
+    // Prevent cancelling an already-cancelled booking
+    if (booking.status === "cancelled") {
+      res.status(400).json({ message: "Booking is already cancelled" });
+      return;
+    }
+
+    booking.status = "cancelled";
+    await booking.save();
+
+    res.status(200).json({
+      success: true,
+      message: "Booking cancelled successfully",
+      booking,
+    });
+  } catch (error: any) {
+    console.error("Error in cancelBooking:", error);
+    res.status(500).json({ message: error.message || "Server Error" });
+  }
+};
+
 
