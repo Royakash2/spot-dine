@@ -7,6 +7,7 @@ import express, {
 import cors from "cors";
 import connectDB from "./config/db.js";
 import authRoutes from "./routes/authRoutes.js";
+import restaurantRoutes from "./routes/restaurantRoutes.js";
 
 const app = express();
 // coonect mongodb
@@ -22,6 +23,7 @@ app.get("/", (req: Request, res: Response) => {
 });
 
 app.use("/api/auth", authRoutes);
+app.use("/api/restaurants", restaurantRoutes);
 
 // global error handler
 app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
