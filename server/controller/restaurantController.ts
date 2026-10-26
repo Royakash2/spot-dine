@@ -1,5 +1,6 @@
 import type { Request, Response } from "express";
 import { Restaurant } from "../models/Restaurant.js";
+import { Booking } from "../models/Booking.js";
 
 // get all restaurant with search and filter
 // GET /api/restaurants
@@ -156,14 +157,41 @@ export const getRestaurantAvailability = async (
     const dayEnd = new Date(date);
     dayEnd.setUTCHours(23, 59, 59, 999);
 
-    // --- 4. For each available slot, compute how many seats are already booked ---
-    // (We'll wire up real Booking queries once the Booking model exists)
-    // For now: all slots are open with full totalSeats capacity
-    const slots = restaurant.availableSlots.map((time) => ({
-      time,
-      availableSeats: restaurant.totalSeats,
-      isAvailable: restaurant.totalSeats >= guestCount,
-    }));
+    // --- 4. Aggregate booked seats per time slot in one DB round-trip ---
+    const bookedPerSlot = await Booking.aggregate<{
+      _id: string;
+      bookedSeats: number;
+    }>([
+      {
+        $match: {
+          restaurant: restaurant._id,
+          date: { $gte: dayStart, $lte: dayEnd },
+          status: { $in: ["pending", "confirmed"] }, // exclude cancelled
+        },
+      },
+      {
+        $group: {
+          _id: "$timeSlot",           // group by time slot
+          bookedSeats: { $sum: "$guests" },
+        },
+      },
+    ]);
+
+    // Turn the aggregation result into a quick lookup map: { "7:00 PM": 8, ... }
+    const bookedMap = new Map(
+      bookedPerSlot.map(({ _id, bookedSeats }) => [_id, bookedSeats]),
+    );
+
+    // Build the slot list with real remaining capacity
+    const slots = restaurant.availableSlots.map((time) => {
+      const alreadyBooked = bookedMap.get(time) ?? 0;
+      const availableSeats = restaurant.totalSeats - alreadyBooked;
+      return {
+        time,
+        availableSeats,
+        isAvailable: availableSeats >= guestCount,
+      };
+    });
 
     res.status(200).json({
       success: true,
