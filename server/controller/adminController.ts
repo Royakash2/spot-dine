@@ -102,6 +102,35 @@ export const getAllBookingsAdmin = async (
   }
 };
 
+// @desc  Get ALL users
+// GET   /api/admin/users
+// @access Admin
+export const getAllUsers = async (
+  req: AuthRequest,
+  res: Response,
+): Promise<void> => {
+  try {
+    const { role } = req.query;
+
+    const filter: Record<string, any> = {};
+    if (role && ["user", "owner", "admin"].includes(role as string)) {
+      filter.role = role;
+    }
+
+    // Never return passwords
+    const users = await User.find(filter).select("-password").sort({ createdAt: -1 });
+
+    res.status(200).json({
+      success: true,
+      count: users.length,
+      users,
+    });
+  } catch (error: any) {
+    console.error("Error in getAllUsers:", error);
+    res.status(500).json({ message: error.message || "Server Error" });
+  }
+};
+
 
 
 
