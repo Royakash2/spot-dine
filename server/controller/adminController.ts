@@ -35,4 +35,40 @@ export const getAllRestaurantsAdmin = async (
   }
 };
 
+// @desc  Approve or reject a restaurant listing
+// PATCH /api/admin/restaurants/:id/status
+// body  { status: "approved" | "rejected" }
+// @access Admin
+export const updateRestaurantStatus = async (
+  req: AuthRequest,
+  res: Response,
+): Promise<void> => {
+  try {
+    const { id } = req.params;
+    const { status } = req.body;
+
+    if (!["approved", "rejected"].includes(status)) {
+      res.status(400).json({ message: 'status must be "approved" or "rejected"' });
+      return;
+    }
+
+    const restaurant = await Restaurant.findById(id);
+    if (!restaurant) {
+      res.status(404).json({ message: "Restaurant not found" });
+      return;
+    }
+
+    restaurant.status = status;
+    await restaurant.save();
+
+    res.status(200).json({
+      success: true,
+      message: `Restaurant ${status} successfully`,
+      restaurant,
+    });
+  } catch (error: any) {
+    console.error("Error in updateRestaurantStatus:", error);
+    res.status(500).json({ message: error.message || "Server Error" });
+  }
+};
 
