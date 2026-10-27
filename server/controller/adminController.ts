@@ -71,4 +71,37 @@ export const updateRestaurantStatus = async (
     res.status(500).json({ message: error.message || "Server Error" });
   }
 };
+// @desc  Get ALL bookings across all restaurants
+// GET   /api/admin/bookings
+// @access Admin
+export const getAllBookingsAdmin = async (
+  req: AuthRequest,
+  res: Response,
+): Promise<void> => {
+  try {
+    const { status } = req.query;
+
+    const filter: Record<string, any> = {};
+    if (status && ["pending", "confirmed", "cancelled"].includes(status as string)) {
+      filter.status = status;
+    }
+
+    const bookings = await Booking.find(filter)
+      .populate("restaurant", "name slug location")
+      .populate("user", "name email")
+      .sort({ date: -1 });
+
+    res.status(200).json({
+      success: true,
+      count: bookings.length,
+      bookings,
+    });
+  } catch (error: any) {
+    console.error("Error in getAllBookingsAdmin:", error);
+    res.status(500).json({ message: error.message || "Server Error" });
+  }
+};
+
+
+
 
