@@ -131,6 +131,46 @@ export const getAllUsers = async (
   }
 };
 
+// @desc  Get platform-level stats for the admin dashboard
+// GET   /api/admin/stats
+// @access Admin
+export const getAdminStats = async (
+  req: AuthRequest,
+  res: Response,
+): Promise<void> => {
+  try {
+    // Run all counts in parallel for speed
+    const [
+      totalRestaurants,
+      pendingRestaurants,
+      approvedRestaurants,
+      totalBookings,
+      activeBookings,
+      totalUsers,
+    ] = await Promise.all([
+      Restaurant.countDocuments(),
+      Restaurant.countDocuments({ status: "pending" }),
+      Restaurant.countDocuments({ status: "approved" }),
+      Booking.countDocuments(),
+      Booking.countDocuments({ status: { $in: ["pending", "confirmed"] } }),
+      User.countDocuments({ role: "user" }),
+    ]);
 
+    res.status(200).json({
+      success: true,
+      stats: {
+        totalRestaurants,
+        pendingRestaurants,
+        approvedRestaurants,
+        totalBookings,
+        activeBookings,
+        totalUsers,
+      },
+    });
+  } catch (error: any) {
+    console.error("Error in getAdminStats:", error);
+    res.status(500).json({ message: error.message || "Server Error" });
+  }
+};
 
 
