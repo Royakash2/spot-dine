@@ -1,4 +1,5 @@
 import type { Request, Response } from "express";
+import type { AuthRequest } from "../middlewares/auth.js";
 import { Restaurant } from "../models/Restaurant.js";
 import { Booking } from "../models/Booking.js";
 
@@ -201,6 +202,229 @@ export const getRestaurantAvailability = async (
     });
   } catch (error: any) {
     console.error("Error in getRestaurantAvailability:", error);
+    res.status(500).json({ message: error.message || "Server Error" });
+  }
+};
+
+// ─── OWNER ROUTES ────────────────────────────────────────────────────────────
+
+// @desc  Get all restaurants owned by the logged-in owner
+// GET   /api/restaurants/my
+// @access Owner
+export const getMyRestaurants = async (
+  req: AuthRequest,
+  res: Response,
+): Promise<void> => {
+  try {
+    if (!req.user) {
+      res.status(401).json({ message: "Not authorised" });
+      return;
+    }
+
+    const restaurants = await Restaurant.find({ owner: req.user._id }).sort({
+      createdAt: -1,
+    });
+
+    res.status(200).json({
+      success: true,
+      count: restaurants.length,
+      restaurants,
+    });
+  } catch (error: any) {
+    console.error("Error in getMyRestaurants:", error);
+    res.status(500).json({ message: error.message || "Server Error" });
+  }
+};
+
+// @desc  Create a new restaurant listing (starts as "pending" until admin approves)
+// POST  /api/restaurants
+// @access Owner
+export const createRestaurant = async (
+  req: AuthRequest,
+  res: Response,
+): Promise<void> => {
+  try {
+    if (!req.user) {
+      res.status(401).json({ message: "Not authorised" });
+      return;
+    }
+
+    const {
+      name,
+      description,
+      cuisine,
+      priceRange,
+      location,
+      address,
+      image,
+      chef,
+      tags,
+      availableSlots,
+      totalSeats,
+      featured,
+      exclusive,
+    } = req.body;
+
+    if (!name || !description || !cuisine || !location || !address) {
+      res.status(400).json({
+        message: "name, description, cuisine, location and address are required",
+      });
+      return;
+    }
+
+    // Auto-generate a URL-friendly slug from the restaurant name
+    const baseSlug = name
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9\s-]/g, "")
+      .replace(/\s+/g, "-");
+
+    // Append a short random suffix to keep slugs unique
+    const slug = `${baseSlug}-${Date.now().toString(36)}`;
+
+    const restaurant = await Restaurant.create({
+      name,
+      slug,
+      description,
+      cuisine,
+      priceRange: priceRange ?? "$$",
+      location,
+      address,
+      image: image ?? "",
+      chef: chef ?? "",
+      tags: tags ?? [],
+      availableSlots: availableSlots ?? [],
+      totalSeats: totalSeats ?? 20,
+      featured: featured ?? false,
+      exclusive: exclusive ?? false,
+      owner: req.user._id,
+      status: "pending", // admin must approve before it goes live
+    });
+
+    res.status(201).json({
+      success: true,
+      message: "Restaurant submitted for review. It will go live once approved by an admin.",
+      restaurant,
+    });
+  } catch (error: any) {
+    console.error("Error in createRestaurant:", error);
+    res.status(500).json({ message: error.message || "Server Error" });
+  }
+};
+
+// @desc  Update own restaurant details
+// PUT   /api/restaurants/:id
+// @access Owner
+export const updateRestaurant = async (
+  req: AuthRequest,
+  res: Response,
+): Promise<void> => {
+  try {
+    if (!req.user) {
+      res.status(401).json({ message: "Not authorised" });
+      return;
+    }
+
+    const { id } = req.params;
+    const restaurant = await Restaurant.findById(id);
+
+    if (!restaurant) {
+      res.status(404).json({ message: "Restaurant not found" });
+      return;
+    }
+
+    // Only the owner (or an admin) can update it
+    if (
+      restaurant.owner.toString() !== req.user._id.toString() &&
+      req.user.role !== "admin"
+    ) {
+      res.status(403).json({ message: "Not authorised to update this restaurant" });
+      return;
+    }
+
+    // Fields that owners are allowed to update
+    // (status is intentionally excluded — only admins change that)
+    const allowedFields = [
+      "name",
+      "description",
+      "cuisine",
+      "priceRange",
+      "location",
+      "address",
+      "image",
+      "chef",
+      "tags",
+      "availableSlots",
+      "totalSeats",
+    ];
+
+    allowedFields.forEach((field) => {
+      if (req.body[field] !== undefined) {
+        (restaurant as any)[field] = req.body[field];
+      }
+    });
+
+    // If the name changed, regenerate the slug
+    if (req.body.name) {
+      const baseSlug = req.body.name
+        .toLowerCase()
+        .trim()
+        .replace(/[^a-z0-9\s-]/g, "")
+        .replace(/\s+/g, "-");
+      restaurant.slug = `${baseSlug}-${Date.now().toString(36)}`;
+    }
+
+    await restaurant.save();
+
+    res.status(200).json({
+      success: true,
+      message: "Restaurant updated successfully",
+      restaurant,
+    });
+  } catch (error: any) {
+    console.error("Error in updateRestaurant:", error);
+    res.status(500).json({ message: error.message || "Server Error" });
+  }
+};
+
+// @desc  Delete own restaurant
+// DELETE /api/restaurants/:id
+// @access Owner
+export const deleteRestaurant = async (
+  req: AuthRequest,
+  res: Response,
+): Promise<void> => {
+  try {
+    if (!req.user) {
+      res.status(401).json({ message: "Not authorised" });
+      return;
+    }
+
+    const { id } = req.params;
+    const restaurant = await Restaurant.findById(id);
+
+    if (!restaurant) {
+      res.status(404).json({ message: "Restaurant not found" });
+      return;
+    }
+
+    // Only the owner (or an admin) can delete it
+    if (
+      restaurant.owner.toString() !== req.user._id.toString() &&
+      req.user.role !== "admin"
+    ) {
+      res.status(403).json({ message: "Not authorised to delete this restaurant" });
+      return;
+    }
+
+    await restaurant.deleteOne();
+
+    res.status(200).json({
+      success: true,
+      message: "Restaurant deleted successfully",
+    });
+  } catch (error: any) {
+    console.error("Error in deleteRestaurant:", error);
     res.status(500).json({ message: error.message || "Server Error" });
   }
 };
