@@ -140,7 +140,7 @@ export const getUserBookings = async (
 
 // @desc  Cancel a booking (soft-cancel — sets status to "cancelled")
 // PATCH /api/bookings/:id/cancel
-// @access Private
+// @access Customer (own booking) | Owner (of the restaurant) | Admin
 export const cancelBooking = async (
   req: AuthRequest,
   res: Response,
@@ -152,17 +152,23 @@ export const cancelBooking = async (
       res.status(401).json({ message: "Not authorised" });
       return;
     }
-    const userId = req.user._id;
 
-    const booking = await Booking.findById(id);
+    const booking = await Booking.findById(id).populate("restaurant");
 
     if (!booking) {
       res.status(404).json({ message: "Booking not found" });
       return;
     }
 
-    // Only the booking owner can cancel it
-    if (booking.user.toString() !== userId.toString()) {
+    const isCustomer = booking.user.toString() === req.user._id.toString();
+    const isAdmin    = req.user.role === "admin";
+
+    // Check if the logged-in user is the owner of the restaurant for this booking
+    const restaurant = await Restaurant.findById(booking.restaurant);
+    const isRestaurantOwner =
+      restaurant?.owner.toString() === req.user._id.toString();
+
+    if (!isCustomer && !isRestaurantOwner && !isAdmin) {
       res.status(403).json({ message: "Not authorised to cancel this booking" });
       return;
     }
@@ -183,6 +189,130 @@ export const cancelBooking = async (
     });
   } catch (error: any) {
     console.error("Error in cancelBooking:", error);
+    res.status(500).json({ message: error.message || "Server Error" });
+  }
+};
+
+// ─── OWNER ROUTES ────────────────────────────────────────────────────────────
+
+// @desc  Get all bookings for a specific restaurant (owner view)
+// GET   /api/bookings/restaurant/:restaurantId
+// @access Owner
+export const getRestaurantBookings = async (
+  req: AuthRequest,
+  res: Response,
+): Promise<void> => {
+  try {
+    if (!req.user) {
+      res.status(401).json({ message: "Not authorised" });
+      return;
+    }
+
+    const { restaurantId } = req.params;
+    const { status, date } = req.query;
+
+    // Verify the restaurant exists and belongs to this owner (admins bypass)
+    const restaurant = await Restaurant.findById(restaurantId);
+    if (!restaurant) {
+      res.status(404).json({ message: "Restaurant not found" });
+      return;
+    }
+
+    if (
+      restaurant.owner.toString() !== req.user._id.toString() &&
+      req.user.role !== "admin"
+    ) {
+      res.status(403).json({ message: "Not authorised to view this restaurant's bookings" });
+      return;
+    }
+
+    // Build optional filters
+    const filter: Record<string, any> = { restaurant: restaurantId };
+
+    if (status && ["pending", "confirmed", "cancelled"].includes(status as string)) {
+      filter.status = status;
+    }
+
+    if (date && typeof date === "string") {
+      const dayStart = new Date(date);
+      dayStart.setUTCHours(0, 0, 0, 0);
+      const dayEnd = new Date(date);
+      dayEnd.setUTCHours(23, 59, 59, 999);
+      filter.date = { $gte: dayStart, $lte: dayEnd };
+    }
+
+    const bookings = await Booking.find(filter)
+      .populate("user", "name email phone")
+      .sort({ date: 1, timeSlot: 1 }); // chronological order
+
+    res.status(200).json({
+      success: true,
+      count: bookings.length,
+      bookings,
+    });
+  } catch (error: any) {
+    console.error("Error in getRestaurantBookings:", error);
+    res.status(500).json({ message: error.message || "Server Error" });
+  }
+};
+
+// @desc  Confirm a pending booking
+// PATCH /api/bookings/:id/confirm
+// @access Owner
+export const confirmBooking = async (
+  req: AuthRequest,
+  res: Response,
+): Promise<void> => {
+  try {
+    if (!req.user) {
+      res.status(401).json({ message: "Not authorised" });
+      return;
+    }
+
+    const { id } = req.params;
+    const booking = await Booking.findById(id);
+
+    if (!booking) {
+      res.status(404).json({ message: "Booking not found" });
+      return;
+    }
+
+    // Verify the logged-in user owns the restaurant for this booking
+    const restaurant = await Restaurant.findById(booking.restaurant);
+    if (!restaurant) {
+      res.status(404).json({ message: "Restaurant not found" });
+      return;
+    }
+
+    if (
+      restaurant.owner.toString() !== req.user._id.toString() &&
+      req.user.role !== "admin"
+    ) {
+      res.status(403).json({ message: "Not authorised to confirm this booking" });
+      return;
+    }
+
+    // Can only confirm a pending booking
+    if (booking.status !== "pending") {
+      res.status(400).json({
+        message: `Booking cannot be confirmed — current status is "${booking.status}"`,
+      });
+      return;
+    }
+
+    booking.status = "confirmed";
+    await booking.save();
+
+    await booking.populate("user", "name email");
+    await booking.populate("restaurant", "name slug");
+
+    res.status(200).json({
+      success: true,
+      message: "Booking confirmed successfully",
+      booking,
+    });
+  } catch (error: any) {
+    console.error("Error in confirmBooking:", error);
     res.status(500).json({ message: error.message || "Server Error" });
   }
 };
