@@ -1,6 +1,6 @@
 import type { Response } from "express";
 import type { AuthRequest } from "../middlewares/auth.js";
-import { Booking } from "../models/Booking.js";
+import { Booking, generateBookingId } from "../models/Booking.js";
 import { Restaurant } from "../models/Restaurant.js";
 
 // @desc  Create a new booking
@@ -11,7 +11,17 @@ export const createBooking = async (
   res: Response,
 ): Promise<void> => {
   try {
-    const { restaurantId, date, timeSlot, guests, specialRequests } = req.body;
+    const {
+      restaurantId,
+      date,
+      timeSlot,
+      guests,
+      occasion,
+      name,
+      email,
+      phone,
+      specialRequests,
+    } = req.body;
 
     // Guard: protect middleware guarantees req.user exists, but we assert here
     // so TypeScript narrows userId from ObjectId|undefined → ObjectId
@@ -26,6 +36,34 @@ export const createBooking = async (
       res.status(400).json({
         message: "restaurantId, date, timeSlot, and guests are required",
       });
+      return;
+    }
+
+    // --- 1a. Party size must be a positive whole number ---
+    const guestCount = Number(guests);
+    if (!Number.isInteger(guestCount) || guestCount < 1) {
+      res.status(400).json({
+        message: "guests must be a whole number of at least 1",
+      });
+      return;
+    }
+
+    // --- 1b. The date must be valid and not in the past ---
+    const requestedDate = new Date(date);
+    if (Number.isNaN(requestedDate.getTime())) {
+      res.status(400).json({ message: "Invalid booking date" });
+      return;
+    }
+
+    const dayStart = new Date(requestedDate);
+    dayStart.setUTCHours(0, 0, 0, 0);
+    const dayEnd = new Date(requestedDate);
+    dayEnd.setUTCHours(23, 59, 59, 999);
+
+    const todayStart = new Date();
+    todayStart.setUTCHours(0, 0, 0, 0);
+    if (dayStart < todayStart) {
+      res.status(400).json({ message: "Cannot book a date in the past" });
       return;
     }
 
@@ -49,11 +87,6 @@ export const createBooking = async (
     }
 
     // --- 4. Count already-booked seats for this slot on this date ---
-    const requestedDate = new Date(date);
-    const dayStart = new Date(requestedDate);
-    dayStart.setUTCHours(0, 0, 0, 0);
-    const dayEnd = new Date(requestedDate);
-    dayEnd.setUTCHours(23, 59, 59, 999);
 
     const bookedSeatsResult = await Booking.aggregate([
       {
@@ -75,7 +108,7 @@ export const createBooking = async (
     const alreadyBooked = bookedSeatsResult[0]?.totalBooked ?? 0;
     const availableSeats = restaurant.totalSeats - alreadyBooked;
 
-    if (guests > availableSeats) {
+    if (guestCount > availableSeats) {
       res.status(409).json({
         message: `Not enough seats. Only ${availableSeats} seat(s) available for this slot.`,
         availableSeats,
@@ -85,11 +118,16 @@ export const createBooking = async (
 
     // --- 5. Create the booking ---
     const booking = await Booking.create({
+      bookingId: generateBookingId(),
       restaurant: restaurantId,
       user: userId,
       date: requestedDate,
       timeSlot,
-      guests,
+      guests: guestCount,
+      occasion: occasion ?? "",
+      guestName: name ?? "",
+      guestEmail: email ?? "",
+      guestPhone: phone ?? "",
       specialRequests: specialRequests ?? "",
       status: "pending",
     });
@@ -173,9 +211,14 @@ export const cancelBooking = async (
       return;
     }
 
-    // Prevent cancelling an already-cancelled booking
+    // Prevent cancelling an already-cancelled or completed booking
     if (booking.status === "cancelled") {
       res.status(400).json({ message: "Booking is already cancelled" });
+      return;
+    }
+
+    if (booking.status === "completed") {
+      res.status(400).json({ message: "Completed bookings cannot be cancelled" });
       return;
     }
 
@@ -229,7 +272,7 @@ export const getRestaurantBookings = async (
     // Build optional filters
     const filter: Record<string, any> = { restaurant: restaurantId };
 
-    if (status && ["pending", "confirmed", "cancelled"].includes(status as string)) {
+    if (status && ["pending", "confirmed", "completed", "cancelled"].includes(status as string)) {
       filter.status = status;
     }
 
@@ -313,6 +356,69 @@ export const confirmBooking = async (
     });
   } catch (error: any) {
     console.error("Error in confirmBooking:", error);
+    res.status(500).json({ message: error.message || "Server Error" });
+  }
+};
+
+// @desc  Mark a confirmed booking as completed (guest has dined)
+// PATCH /api/bookings/:id/complete
+// @access Owner (of the restaurant) | Admin
+export const completeBooking = async (
+  req: AuthRequest,
+  res: Response,
+): Promise<void> => {
+  try {
+    if (!req.user) {
+      res.status(401).json({ message: "Not authorised" });
+      return;
+    }
+
+    const { id } = req.params;
+    const booking = await Booking.findById(id);
+
+    if (!booking) {
+      res.status(404).json({ message: "Booking not found" });
+      return;
+    }
+
+    // Verify the logged-in user owns the restaurant for this booking
+    const restaurant = await Restaurant.findById(booking.restaurant);
+    if (!restaurant) {
+      res.status(404).json({ message: "Restaurant not found" });
+      return;
+    }
+
+    if (
+      restaurant.owner.toString() !== req.user._id.toString() &&
+      req.user.role !== "admin"
+    ) {
+      res.status(403).json({
+        message: "Not authorised to complete this booking",
+      });
+      return;
+    }
+
+    // Only a confirmed booking can be completed
+    if (booking.status !== "confirmed") {
+      res.status(400).json({
+        message: `Booking cannot be completed — current status is "${booking.status}"`,
+      });
+      return;
+    }
+
+    booking.status = "completed";
+    await booking.save();
+
+    await booking.populate("user", "name email");
+    await booking.populate("restaurant", "name slug");
+
+    res.status(200).json({
+      success: true,
+      message: "Booking marked as completed",
+      booking,
+    });
+  } catch (error: any) {
+    console.error("Error in completeBooking:", error);
     res.status(500).json({ message: error.message || "Server Error" });
   }
 };

@@ -5,6 +5,7 @@ import {
   cancelBooking,
   getRestaurantBookings,
   confirmBooking,
+  completeBooking,
 } from "../controller/bookingController.js";
 import { protect, ownerOnly } from "../middlewares/auth.js";
 
@@ -19,6 +20,7 @@ router.get("/restaurant/:restaurantId", protect, ownerOnly, getRestaurantBooking
 
 // ─── Shared param routes ──────────────────────────────────────────────────────
 router.patch("/:id/confirm", protect, ownerOnly, confirmBooking); // PATCH /api/bookings/:id/confirm
+router.patch("/:id/complete", protect, ownerOnly, completeBooking); // PATCH /api/bookings/:id/complete
 router.patch("/:id/cancel", protect, cancelBooking);              // PATCH /api/bookings/:id/cancel
 
 export default router;
