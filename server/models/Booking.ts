@@ -1,19 +1,33 @@
 import { Document, model, Schema, Types } from "mongoose";
+import { randomBytes } from "node:crypto";
 
 export interface IBooking extends Document {
+  bookingId: string;
   restaurant: Types.ObjectId;
   user: Types.ObjectId;
   date: Date;
   timeSlot: string;
   guests: number;
-  status: "pending" | "confirmed" | "cancelled";
+  occasion?: string;
+  guestName?: string;
+  guestEmail?: string;
+  guestPhone?: string;
+  status: "pending" | "confirmed" | "completed" | "cancelled";
   specialRequests?: string;
   createdAt: Date;
   updatedAt: Date;
 }
 
+// Human-readable confirmation code shown to diners, owners and admins
+// e.g. "GR-71B448A7"
+export const generateBookingId = (): string =>
+  `GR-${randomBytes(4).toString("hex").toUpperCase()}`;
+
 const BookingSchema = new Schema<IBooking>(
   {
+    // sparse keeps the unique index buildable for pre-existing bookings,
+    // which get a reference code backfilled on their next save
+    bookingId: { type: String, required: true, unique: true, sparse: true, trim: true },
     restaurant: {
       type: Schema.Types.ObjectId,
       ref: "Restaurant",
@@ -38,9 +52,18 @@ const BookingSchema = new Schema<IBooking>(
       required: true,
       min: 1,
     },
+    occasion: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+    // Contact details as entered on the booking form (snapshot at booking time)
+    guestName: { type: String, trim: true, default: "" },
+    guestEmail: { type: String, trim: true, lowercase: true, default: "" },
+    guestPhone: { type: String, trim: true, default: "" },
     status: {
       type: String,
-      enum: ["pending", "confirmed", "cancelled"],
+      enum: ["pending", "confirmed", "completed", "cancelled"],
       default: "pending",
     },
     specialRequests: {
@@ -53,6 +76,14 @@ const BookingSchema = new Schema<IBooking>(
     timestamps: true,
   },
 );
+
+// Backfill a reference code on any document that predates the field, so older
+// bookings can still be confirmed/cancelled without tripping validation.
+BookingSchema.pre("validate", function () {
+  if (!this.bookingId) {
+    this.bookingId = generateBookingId();
+  }
+});
 
 // Index for fast availability queries:
 // "for restaurant X, on date Y, across all time slots"

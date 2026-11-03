@@ -82,7 +82,12 @@ export const getAllBookingsAdmin = async (
     const { status } = req.query;
 
     const filter: Record<string, any> = {};
-    if (status && ["pending", "confirmed", "cancelled"].includes(status as string)) {
+    if (
+      status &&
+      ["pending", "confirmed", "completed", "cancelled"].includes(
+        status as string,
+      )
+    ) {
       filter.status = status;
     }
 
