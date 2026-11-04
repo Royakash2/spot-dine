@@ -2,6 +2,28 @@ import type { Request, Response } from "express";
 import type { AuthRequest } from "../middlewares/auth.js";
 import { Restaurant } from "../models/Restaurant.js";
 import { Booking } from "../models/Booking.js";
+import { removeUploadedImage } from "../middlewares/upload.js";
+
+// Multer delivers every text field as a string, while JSON clients can send a
+// real array. Normalise both forms into a clean string[].
+const toStringArray = (value: unknown): string[] => {
+  if (Array.isArray(value)) {
+    return value.map((item) => String(item).trim()).filter(Boolean);
+  }
+  if (typeof value === "string") {
+    return value
+      .split(",")
+      .map((item) => item.trim())
+      .filter(Boolean);
+  }
+  return [];
+};
+
+// "24" -> 24, "" -> null, "abc" -> null, 0 -> null
+const toPositiveInt = (value: unknown): number | null => {
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed >= 1 ? parsed : null;
+};
 
 // get all restaurant with search and filter
 // GET /api/restaurants
@@ -265,9 +287,27 @@ export const createRestaurant = async (
       exclusive,
     } = req.body;
 
+    // Public Cloudinary URL set by the upload middleware
+    const uploadedImage = req.fileUrl ?? "";
+
     if (!name || !description || !cuisine || !location || !address) {
+      // Drop the upload rather than leaving an orphaned file in storage
+      await removeUploadedImage(uploadedImage);
       res.status(400).json({
         message: "name, description, cuisine, location and address are required",
+      });
+      return;
+    }
+
+    const seats =
+      totalSeats === undefined || totalSeats === ""
+        ? 20
+        : toPositiveInt(totalSeats);
+
+    if (seats === null) {
+      await removeUploadedImage(uploadedImage);
+      res.status(400).json({
+        message: "totalSeats must be a whole number of at least 1",
       });
       return;
     }
@@ -290,11 +330,13 @@ export const createRestaurant = async (
       priceRange: priceRange ?? "$$",
       location,
       address,
-      image: image ?? "",
+      image:
+        uploadedImage ||
+        (typeof image === "string" && image.trim() ? image.trim() : ""),
       chef: chef ?? "",
-      tags: tags ?? [],
-      availableSlots: availableSlots ?? [],
-      totalSeats: totalSeats ?? 20,
+      tags: toStringArray(tags),
+      availableSlots: toStringArray(availableSlots),
+      totalSeats: seats,
       featured: featured ?? false,
       exclusive: exclusive ?? false,
       owner: req.user._id,
@@ -342,6 +384,23 @@ export const updateRestaurant = async (
       return;
     }
 
+    // Validate capacity before mutating anything
+    const seats =
+      req.body.totalSeats === undefined
+        ? null
+        : toPositiveInt(req.body.totalSeats);
+
+    if (req.body.totalSeats !== undefined && seats === null) {
+      // The request is invalid — don't leave the upload behind
+      await removeUploadedImage(req.fileUrl);
+      res.status(400).json({
+        message: "totalSeats must be a whole number of at least 1",
+      });
+      return;
+    }
+
+    const previousImage = restaurant.image;
+
     // Fields that owners are allowed to update
     // (status is intentionally excluded — only admins change that)
     const allowedFields = [
@@ -351,11 +410,7 @@ export const updateRestaurant = async (
       "priceRange",
       "location",
       "address",
-      "image",
       "chef",
-      "tags",
-      "availableSlots",
-      "totalSeats",
     ];
 
     allowedFields.forEach((field) => {
@@ -363,6 +418,28 @@ export const updateRestaurant = async (
         (restaurant as any)[field] = req.body[field];
       }
     });
+
+    if (req.body.tags !== undefined) {
+      restaurant.tags = toStringArray(req.body.tags);
+    }
+
+    if (req.body.availableSlots !== undefined) {
+      restaurant.availableSlots = toStringArray(req.body.availableSlots);
+    }
+
+    if (seats !== null) {
+      restaurant.totalSeats = seats;
+    }
+
+    // A new upload replaces the stored image; otherwise keep the existing one
+    if (req.file) {
+      restaurant.image = req.fileUrl ?? restaurant.image;
+    } else if (
+      typeof req.body.image === "string" &&
+      req.body.image.trim()
+    ) {
+      restaurant.image = req.body.image.trim();
+    }
 
     // If the name changed, regenerate the slug
     if (req.body.name) {
@@ -375,6 +452,11 @@ export const updateRestaurant = async (
     }
 
     await restaurant.save();
+
+    // The replacement was stored, so the old image is safe to delete
+    if (req.file && previousImage !== restaurant.image) {
+      await removeUploadedImage(previousImage);
+    }
 
     res.status(200).json({
       success: true,
