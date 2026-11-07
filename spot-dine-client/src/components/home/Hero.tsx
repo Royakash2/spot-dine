@@ -30,7 +30,7 @@ export default function Hero() {
     };
 
     return (
-        <section className="w-full max-w-7xl mx-auto px-6 md:px-10 pt-2  mb-12 md:mb-20">
+        <section className="relative w-full pt-2 mb-12 md:mb-20">
             <div className="relative md:h-[500px] flex flex-col w-full ">
                 {/* Background Image Slider  */}
                 <div className="absolute inset-0 z-0 overflow-hidden">
