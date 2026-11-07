@@ -1,91 +1,69 @@
-import { type Request, type NextFunction, type Response } from "express";
+import { type NextFunction, type Request, type Response } from "express";
 import jwt from "jsonwebtoken";
 import { User } from "../models/User.js";
 import type { IUser } from "../models/User.js";
+import { forbidden, unauthorized } from "../utils/AppError.js";
 
 export interface AuthRequest extends Request {
   user?: IUser;
 }
 
-// @desc  Protect routes
-// @access Private
+interface TokenPayload {
+  id: string;
+}
+
+// Verifies the Bearer token, loads the user and attaches it to req.user.
+// Express 5 forwards rejected promises to the error handler, so failures are
+// thrown here instead of replying directly.
 export const protect = async (
   req: AuthRequest,
-  res: Response,
+  _res: Response,
   next: NextFunction,
 ): Promise<void> => {
-  let token;
+  const [scheme, token] = (req.headers.authorization ?? "").split(" ");
 
-  if (
-    req.headers.authorization &&
-    req.headers.authorization.startsWith("Bearer")
-  ) {
-    try {
-      // Get token from header
-      token = req.headers.authorization.split(" ")[1];
-
-      if (!token) {
-        res.status(401).json({ message: "Not authorized, no token" });
-        return;
-      }
-
-      // Verify token
-      const decoded = jwt.verify(token, process.env.JWT_SECRET!) as {
-        id: string;
-      };
-
-      // Get user from token
-      const user = await User.findById(decoded.id).select("-password");
-      if (!user) {
-        res.status(401).json({ message: "Not authorized, user not found" });
-        return;
-      }
-
-      req.user = user;
-      next();
-    } catch (error) {
-      console.error("Error in protect middleware:", error);
-      res.status(401).json({ message: "Not authorized, token failed" });
-    }
+  if (scheme !== "Bearer" || !token) {
+    throw unauthorized("Not authorized, no token");
   }
 
-  if (!token) {
-    res.status(401).json({ message: "Not authorized, no token" });
-    return;
+  let decoded: TokenPayload;
+  try {
+    decoded = jwt.verify(token, process.env.JWT_SECRET as string) as TokenPayload;
+  } catch {
+    throw unauthorized("Not authorized, token failed");
   }
+
+  if (!decoded.id) {
+    throw unauthorized("Not authorized, token failed");
+  }
+
+  const user = await User.findById(decoded.id).select("-password");
+  if (!user) {
+    throw unauthorized("Not authorized, user not found");
+  }
+
+  req.user = user;
+  next();
 };
 
 export const adminOnly = (
   req: AuthRequest,
-  res: Response,
+  _res: Response,
   next: NextFunction,
 ): void => {
-  if (req.user && req.user.role === "admin") {
-    next();
-  } else {
-    res
-      .status(403)
-      .json({
-        message:
-          "Not authorized, access denied. Only admins can access this route",
-      });
+  if (req.user?.role !== "admin") {
+    throw forbidden("Only admins can access this route");
   }
+  next();
 };
+
 export const ownerOnly = (
   req: AuthRequest,
-  res: Response,
+  _res: Response,
   next: NextFunction,
 ): void => {
-  if (req.user && (req.user.role === "owner" || req.user.role === "admin")) {
-    next();
-  } else {
-    res
-      .status(403)
-      .json({
-        message:
-          "Not authorized, access denied. Only owners can access this route",
-      });
+  if (req.user?.role !== "owner" && req.user?.role !== "admin") {
+    throw forbidden("Only restaurant owners can access this route");
   }
+  next();
 };
-
-
