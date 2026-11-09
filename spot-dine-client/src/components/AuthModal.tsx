@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import toast from "react-hot-toast";
 import { useAppContext } from "../context/AppContext.tsx";
 import { X, Mail, Lock, User, Phone } from "lucide-react";
 
@@ -32,19 +33,22 @@ export default function AuthModal() {
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+        if (formLoading) return;
         setFormLoading(true);
 
-        let success: boolean;
-
-        if (isLoginTab) {
-            success = await login(email, password);
-        } else {
-            success = await register(name, email, password, phone, isOwner ? "owner" : "user");
-        }
-
-        setFormLoading(false);
-        if (success) {
+        try {
+            if (isLoginTab) {
+                await login(email, password);
+            } else {
+                await register(name, email, password, phone, isOwner ? "owner" : "user");
+            }
             handleClose();
+        } catch (error) {
+            toast.error(
+                error instanceof Error ? error.message : "Authentication failed. Please try again.",
+            );
+        } finally {
+            setFormLoading(false);
         }
     };
 
@@ -53,8 +57,8 @@ export default function AuthModal() {
             {/* Click outside to close */}
             <div className="absolute inset-0" onClick={handleClose}></div>
 
-            {/* Modal Container */}
-            <div className="relative w-full max-w-md bg-white border border-outline-variant/30 ambient-shadow rounded-lg overflow-hidden z-10 transition-soft transform scale-100 flex flex-col">
+            {/* Modal Container — capped to the viewport so the form scrolls instead of being clipped */}
+            <div className="relative w-full max-w-md max-h-[calc(100dvh-2rem)] bg-white border border-outline-variant/30 ambient-shadow rounded-lg overflow-hidden z-10 transition-soft transform scale-100 flex flex-col">
                 {/* Close Button */}
                 <button
                     onClick={handleClose}
@@ -65,7 +69,7 @@ export default function AuthModal() {
                 </button>
 
                 {/* Header Tabs */}
-                <div className="flex border-b border-outline-variant/20">
+                <div className="flex shrink-0 border-b border-outline-variant/20">
                     <button
                         onClick={() => setIsLoginTab(true)}
                         className={`flex-1 py-5 text-center text-xs font-medium tracking-widest transition-soft cursor-pointer ${
@@ -89,9 +93,12 @@ export default function AuthModal() {
                 </div>
 
                 {/* Form Content */}
-                <form onSubmit={handleSubmit} className="p-8 space-y-6 flex-1 flex flex-col justify-between">
+                <form
+                    onSubmit={handleSubmit}
+                    className="p-6 sm:p-8 space-y-6 flex-1 min-h-0 overflow-y-auto flex flex-col justify-between"
+                >
                     <div>
-                        <div className="text-center mb-8">
+                        <div className="text-center mb-6">
                             <h2 className="font-display text-2xl font-medium text-primary tracking-tight">Welcome to SpotDine</h2>
                             <p className="text-xs text-black/55 mt-2 leading-relaxed">
                                 Access your exclusive reservations and curated dining profile.
