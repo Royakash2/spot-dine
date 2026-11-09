@@ -57,6 +57,19 @@ const RestaurantSchema = new Schema<IRestaurant>(
   },
 );
 
+// Public listing: approved venues, newest first
+RestaurantSchema.index({ status: 1, createdAt: -1 });
+
+// Homepage featured row: approved + featured, best rated first
+RestaurantSchema.index({ status: 1, featured: 1, rating: -1 });
+
+// Search page filters
+RestaurantSchema.index({ cuisine: 1 });
+RestaurantSchema.index({ location: 1 });
+
+// Owner dashboard: my venues
+RestaurantSchema.index({ owner: 1, createdAt: -1 });
+
 export const Restaurant = model<IRestaurant>("Restaurant", RestaurantSchema);
 
 export default Restaurant;

@@ -92,6 +92,20 @@ BookingSchema.index({ restaurant: 1, date: 1, timeSlot: 1 });
 // Index for fast user booking history lookups
 BookingSchema.index({ user: 1, date: -1 });
 
+// One active booking per diner, venue, date and slot. Enforced by the database
+// so a double-click or retried request cannot create two reservations.
+// Cancelled/completed bookings are excluded, so a slot frees up again.
+BookingSchema.index(
+  { user: 1, restaurant: 1, date: 1, timeSlot: 1 },
+  {
+    unique: true,
+    partialFilterExpression: { status: { $in: ["pending", "confirmed"] } },
+  },
+);
+
+// Admin dashboards: "latest bookings" and status filters
+BookingSchema.index({ status: 1, createdAt: -1 });
+
 export const Booking = model<IBooking>("Booking", BookingSchema);
 
 export default Booking;
