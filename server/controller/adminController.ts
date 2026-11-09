@@ -3,36 +3,56 @@ import type { AuthRequest } from "../middlewares/auth.js";
 import { Restaurant } from "../models/Restaurant.js";
 import { Booking } from "../models/Booking.js";
 import { User } from "../models/User.js";
+import { badRequest, notFound } from "../utils/AppError.js";
+import { paginationMeta, parsePagination } from "../utils/pagination.js";
+import { cleanString, escapeRegex, firstString } from "../utils/text.js";
+
+const RESTAURANT_STATUSES = ["pending", "approved", "rejected"] as const;
+const BOOKING_STATUSES = ["pending", "confirmed", "completed", "cancelled"] as const;
+const USER_ROLES = ["user", "owner", "admin"] as const;
+
+interface StatusCount {
+  _id: string;
+  count: number;
+}
+
+const countOf = (rows: StatusCount[], key: string): number =>
+  rows.find((row) => row._id === key)?.count ?? 0;
+
+const sumCounts = (rows: StatusCount[]): number =>
+  rows.reduce((total, row) => total + row.count, 0);
 
 // @desc  Get ALL restaurants regardless of status (pending / approved / rejected)
-// GET   /api/admin/restaurants
+// GET   /api/admin/restaurants?status=pending&page=1&limit=20
 // @access Admin
 export const getAllRestaurantsAdmin = async (
   req: AuthRequest,
   res: Response,
 ): Promise<void> => {
-  try {
-    const { status } = req.query;
+  const status = firstString(req.query.status);
+  const filter: Record<string, unknown> = {};
 
-    // Optionally filter by status: ?status=pending
-    const filter: Record<string, any> = {};
-    if (status && ["pending", "approved", "rejected"].includes(status as string)) {
-      filter.status = status;
-    }
-
-    const restaurants = await Restaurant.find(filter)
-      .populate("owner", "name email")
-      .sort({ createdAt: -1 });
-
-    res.status(200).json({
-      success: true,
-      count: restaurants.length,
-      restaurants,
-    });
-  } catch (error: any) {
-    console.error("Error in getAllRestaurantsAdmin:", error);
-    res.status(500).json({ message: error.message || "Server Error" });
+  if (status && RESTAURANT_STATUSES.includes(status as (typeof RESTAURANT_STATUSES)[number])) {
+    filter.status = status;
   }
+
+  const pagination = parsePagination(req.query as Record<string, unknown>);
+
+  const [restaurants, total] = await Promise.all([
+    Restaurant.find(filter)
+      .populate("owner", "name email")
+      .sort({ createdAt: -1 })
+      .skip(pagination.skip)
+      .limit(pagination.limit),
+    Restaurant.countDocuments(filter),
+  ]);
+
+  res.status(200).json({
+    success: true,
+    count: restaurants.length,
+    ...paginationMeta(total, pagination),
+    restaurants,
+  });
 };
 
 // @desc  Approve or reject a restaurant listing
@@ -43,139 +63,156 @@ export const updateRestaurantStatus = async (
   req: AuthRequest,
   res: Response,
 ): Promise<void> => {
-  try {
-    const { id } = req.params;
-    const { status } = req.body;
+  const { id } = req.params;
+  const status = cleanString(req.body?.status);
 
-    if (!["approved", "rejected"].includes(status)) {
-      res.status(400).json({ message: 'status must be "approved" or "rejected"' });
-      return;
-    }
-
-    const restaurant = await Restaurant.findById(id);
-    if (!restaurant) {
-      res.status(404).json({ message: "Restaurant not found" });
-      return;
-    }
-
-    restaurant.status = status;
-    await restaurant.save();
-
-    res.status(200).json({
-      success: true,
-      message: `Restaurant ${status} successfully`,
-      restaurant,
-    });
-  } catch (error: any) {
-    console.error("Error in updateRestaurantStatus:", error);
-    res.status(500).json({ message: error.message || "Server Error" });
+  if (!["approved", "rejected"].includes(status)) {
+    throw badRequest('status must be "approved" or "rejected"');
   }
+
+  const restaurant = await Restaurant.findById(id);
+  if (!restaurant) {
+    throw notFound("Restaurant not found");
+  }
+
+  restaurant.status = status as "approved" | "rejected";
+  await restaurant.save();
+
+  res.status(200).json({
+    success: true,
+    message: `Restaurant ${status} successfully`,
+    restaurant,
+  });
 };
+
 // @desc  Get ALL bookings across all restaurants
-// GET   /api/admin/bookings
+// GET   /api/admin/bookings?status=confirmed&page=1&limit=20
 // @access Admin
 export const getAllBookingsAdmin = async (
   req: AuthRequest,
   res: Response,
 ): Promise<void> => {
-  try {
-    const { status } = req.query;
+  const status = firstString(req.query.status);
+  const filter: Record<string, unknown> = {};
 
-    const filter: Record<string, any> = {};
-    if (
-      status &&
-      ["pending", "confirmed", "completed", "cancelled"].includes(
-        status as string,
-      )
-    ) {
-      filter.status = status;
-    }
+  if (status && BOOKING_STATUSES.includes(status as (typeof BOOKING_STATUSES)[number])) {
+    filter.status = status;
+  }
 
-    const bookings = await Booking.find(filter)
+  const pagination = parsePagination(req.query as Record<string, unknown>);
+
+  const [bookings, total] = await Promise.all([
+    Booking.find(filter)
       .populate("restaurant", "name slug location")
       .populate("user", "name email")
-      .sort({ date: -1 });
+      .sort({ createdAt: -1 })
+      .skip(pagination.skip)
+      .limit(pagination.limit),
+    Booking.countDocuments(filter),
+  ]);
 
-    res.status(200).json({
-      success: true,
-      count: bookings.length,
-      bookings,
-    });
-  } catch (error: any) {
-    console.error("Error in getAllBookingsAdmin:", error);
-    res.status(500).json({ message: error.message || "Server Error" });
-  }
+  res.status(200).json({
+    success: true,
+    count: bookings.length,
+    ...paginationMeta(total, pagination),
+    bookings,
+  });
 };
 
 // @desc  Get ALL users
-// GET   /api/admin/users
+// GET   /api/admin/users?role=owner&search=ann&page=1&limit=20
 // @access Admin
 export const getAllUsers = async (
   req: AuthRequest,
   res: Response,
 ): Promise<void> => {
-  try {
-    const { role } = req.query;
+  const role = firstString(req.query.role);
+  const search = cleanString(firstString(req.query.search));
+  const filter: Record<string, unknown> = {};
 
-    const filter: Record<string, any> = {};
-    if (role && ["user", "owner", "admin"].includes(role as string)) {
-      filter.role = role;
-    }
-
-    // Never return passwords
-    const users = await User.find(filter).select("-password").sort({ createdAt: -1 });
-
-    res.status(200).json({
-      success: true,
-      count: users.length,
-      users,
-    });
-  } catch (error: any) {
-    console.error("Error in getAllUsers:", error);
-    res.status(500).json({ message: error.message || "Server Error" });
+  if (role && USER_ROLES.includes(role as (typeof USER_ROLES)[number])) {
+    filter.role = role;
   }
+
+  if (search) {
+    const pattern = { $regex: escapeRegex(search), $options: "i" };
+    filter.$or = [{ name: pattern }, { email: pattern }];
+  }
+
+  const pagination = parsePagination(req.query as Record<string, unknown>);
+
+  // Never return passwords
+  const [users, total] = await Promise.all([
+    User.find(filter)
+      .select("-password")
+      .sort({ createdAt: -1 })
+      .skip(pagination.skip)
+      .limit(pagination.limit),
+    User.countDocuments(filter),
+  ]);
+
+  res.status(200).json({
+    success: true,
+    count: users.length,
+    ...paginationMeta(total, pagination),
+    users,
+  });
 };
 
 // @desc  Get platform-level stats for the admin dashboard
 // GET   /api/admin/stats
 // @access Admin
 export const getAdminStats = async (
-  req: AuthRequest,
+  _req: AuthRequest,
   res: Response,
 ): Promise<void> => {
-  try {
-    // Run all counts in parallel for speed
-    const [
-      totalRestaurants,
-      pendingRestaurants,
-      approvedRestaurants,
-      totalBookings,
-      activeBookings,
-      totalUsers,
-    ] = await Promise.all([
-      Restaurant.countDocuments(),
-      Restaurant.countDocuments({ status: "pending" }),
-      Restaurant.countDocuments({ status: "approved" }),
-      Booking.countDocuments(),
-      Booking.countDocuments({ status: { $in: ["pending", "confirmed"] } }),
-      User.countDocuments({ role: "user" }),
-    ]);
+  // One aggregation per collection instead of six separate countDocuments calls,
+  // and the newest bookings the dashboard table needs.
+  const [restaurantRows, bookingRows, userRows, latestBookings] = await Promise.all([
+    Restaurant.aggregate<StatusCount>([
+      { $group: { _id: "$status", count: { $sum: 1 } } },
+    ]),
+    Booking.aggregate<StatusCount>([
+      { $group: { _id: "$status", count: { $sum: 1 } } },
+    ]),
+    User.aggregate<StatusCount>([
+      { $group: { _id: "$role", count: { $sum: 1 } } },
+    ]),
+    Booking.find()
+      .sort({ createdAt: -1 })
+      .limit(5)
+      .populate("restaurant", "name slug")
+      .populate("user", "name email"),
+  ]);
 
-    res.status(200).json({
-      success: true,
-      stats: {
-        totalRestaurants,
-        pendingRestaurants,
-        approvedRestaurants,
-        totalBookings,
-        activeBookings,
-        totalUsers,
+  const totalBookings = sumCounts(bookingRows);
+  const pendingBookings = countOf(bookingRows, "pending");
+  const confirmedBookings = countOf(bookingRows, "confirmed");
+
+  res.status(200).json({
+    success: true,
+    stats: {
+      users: {
+        total: sumCounts(userRows),
+        totalUsers: countOf(userRows, "user"),
+        totalOwners: countOf(userRows, "owner"),
+        totalAdmins: countOf(userRows, "admin"),
       },
-    });
-  } catch (error: any) {
-    console.error("Error in getAdminStats:", error);
-    res.status(500).json({ message: error.message || "Server Error" });
-  }
+      restaurants: {
+        total: sumCounts(restaurantRows),
+        pending: countOf(restaurantRows, "pending"),
+        approved: countOf(restaurantRows, "approved"),
+        rejected: countOf(restaurantRows, "rejected"),
+      },
+      bookings: {
+        total: totalBookings,
+        pending: pendingBookings,
+        confirmed: confirmedBookings,
+        completed: countOf(bookingRows, "completed"),
+        cancelled: countOf(bookingRows, "cancelled"),
+        active: pendingBookings + confirmedBookings,
+      },
+      latestBookings,
+    },
+  });
 };
-
-

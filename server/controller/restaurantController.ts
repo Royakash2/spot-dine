@@ -1,112 +1,141 @@
 import type { Request, Response } from "express";
+import { Types } from "mongoose";
 import type { AuthRequest } from "../middlewares/auth.js";
 import { Restaurant } from "../models/Restaurant.js";
 import { Booking } from "../models/Booking.js";
+import { Review } from "../models/Review.js";
 import { removeUploadedImage } from "../middlewares/upload.js";
+import { badRequest, forbidden, notFound, unauthorized } from "../utils/AppError.js";
+import { paginationMeta, parsePagination } from "../utils/pagination.js";
+import {
+  cleanString,
+  escapeRegex,
+  firstString,
+  firstStringArray,
+  slugify,
+  toPositiveInt,
+  toStringArray,
+} from "../utils/text.js";
 
-// Multer delivers every text field as a string, while JSON clients can send a
-// real array. Normalise both forms into a clean string[].
-const toStringArray = (value: unknown): string[] => {
-  if (Array.isArray(value)) {
-    return value.map((item) => String(item).trim()).filter(Boolean);
+const PRICE_RANGES = ["$", "$$", "$$$", "$$$$"] as const;
+type PriceRange = (typeof PRICE_RANGES)[number];
+
+const DEFAULT_TOTAL_SEATS = 20;
+const MAX_TOTAL_SEATS = 2000;
+// Slot labels are 24-hour clock values, e.g. "18:30"
+const SLOT_PATTERN = /^([01]\d|2[0-3]):([0-5]\d)$/;
+
+const buildSlug = (name: string): string =>
+  `${slugify(name) || "restaurant"}-${Date.now().toString(36)}`;
+
+const parseSlots = (value: unknown): string[] => {
+  const slots = toStringArray(value);
+  const invalid = slots.filter((slot) => !SLOT_PATTERN.test(slot));
+  if (invalid.length > 0) {
+    throw badRequest(
+      `availableSlots must use 24h HH:MM format (invalid: ${invalid.join(", ")})`,
+    );
   }
-  if (typeof value === "string") {
-    return value
-      .split(",")
-      .map((item) => item.trim())
-      .filter(Boolean);
-  }
-  return [];
+  return slots;
 };
 
-// "24" -> 24, "" -> null, "abc" -> null, 0 -> null
-const toPositiveInt = (value: unknown): number | null => {
-  const parsed = Number(value);
-  return Number.isInteger(parsed) && parsed >= 1 ? parsed : null;
+const parsePriceRange = (value: unknown, fallback: PriceRange): PriceRange => {
+  const priceRange = cleanString(value);
+  if (!priceRange) return fallback;
+  if (!PRICE_RANGES.includes(priceRange as PriceRange)) {
+    throw badRequest(`priceRange must be one of: ${PRICE_RANGES.join(", ")}`);
+  }
+  return priceRange as PriceRange;
 };
 
 // get all restaurant with search and filter
-// GET /api/restaurants
+// GET /api/restaurants?search=&location=&cuisine=&priceRange=&sort=&page=&limit=
 // @access Public
 export const getRestaurant = async (
   req: Request,
   res: Response,
 ): Promise<void> => {
-  try {
-    const { search, location, cuisine, priceRange, sort } = req.query;
+  const search = cleanString(firstString(req.query.search));
+  const location = cleanString(firstString(req.query.location));
+  const cuisines = firstStringArray(req.query.cuisine).map((c) => c.trim()).filter(Boolean);
+  const prices = firstStringArray(req.query.priceRange).map((p) => p.trim()).filter(Boolean);
+  const sort = firstString(req.query.sort);
 
-    // Base filter: only return admin-approved restaurants
-    const filter: Record<string, any> = { status: "approved" };
+  // Only admin-approved restaurants are ever public
+  const filter: Record<string, unknown> = { status: "approved" };
 
-    // Search by name, cuisine, or tags (case-insensitive)
-    if (search) {
-      filter.$or = [
-        { name: { $regex: search as string, $options: "i" } },
-        { cuisine: { $regex: search as string, $options: "i" } },
-        { tags: { $regex: search as string, $options: "i" } },
-      ];
-    }
-
-    // Filter by location (city) - partial match
-    if (location) {
-      filter.location = { $regex: location as string, $options: "i" };
-    }
-
-    // Filter by cuisine - supports multiple values e.g. ?cuisine=Italian&cuisine=French
-    if (cuisine) {
-      const cuisineList = Array.isArray(cuisine) ? cuisine : [cuisine];
-      filter.cuisine = { $in: cuisineList };
-    }
-
-    // Filter by price range - supports multiple values e.g. ?priceRange=$$&priceRange=$$$
-    if (priceRange) {
-      const priceList = Array.isArray(priceRange) ? priceRange : [priceRange];
-      filter.priceRange = { $in: priceList };
-    }
-
-    // Sort logic
-    let sortQuery: Record<string, 1 | -1> = { createdAt: -1 }; // default: newest first
-    if (sort === "price_low") sortQuery = { priceRange: 1 };
-    if (sort === "price_high") sortQuery = { priceRange: -1 };
-    if (sort === "rating") sortQuery = { rating: -1 };
-
-    const restaurants = await Restaurant.find(filter).sort(sortQuery);
-
-    res.status(200).json({
-      success: true,
-      count: restaurants.length,
-      restaurants,
-    });
-  } catch (error: any) {
-    console.error("Error in getRestaurant:", error);
-    res.status(500).json({ message: error.message || "Server Error" });
+  // Escape user input before it reaches $regex
+  if (search) {
+    const pattern = { $regex: escapeRegex(search), $options: "i" };
+    filter.$or = [
+      { name: pattern },
+      { cuisine: pattern },
+      { tags: pattern },
+      { description: pattern },
+    ];
   }
+
+  if (location) {
+    filter.location = { $regex: escapeRegex(location), $options: "i" };
+  }
+
+  if (cuisines.length > 0) {
+    // Partial, case-insensitive match so "Italian" also finds
+    // "Italian & Mediterranean"
+    filter.cuisine = { $in: cuisines.map((cuisine) => new RegExp(escapeRegex(cuisine), "i")) };
+  }
+
+  if (prices.length > 0) {
+    filter.priceRange = { $in: prices };
+  }
+
+  const pagination = parsePagination(req.query as Record<string, unknown>);
+  const restaurantsQuery = Restaurant.find(filter);
+
+  if (sort === "price_low") {
+    restaurantsQuery.sort({ priceRange: 1 });
+  } else if (sort === "price_high") {
+    restaurantsQuery.sort({ priceRange: -1 });
+  } else if (sort === "rating") {
+    restaurantsQuery.sort({ rating: -1, reviewCount: -1 });
+  } else {
+    restaurantsQuery.sort({ createdAt: -1 });
+  }
+
+  const [restaurants, total] = await Promise.all([
+    restaurantsQuery.skip(pagination.skip).limit(pagination.limit),
+    Restaurant.countDocuments(filter),
+  ]);
+
+  res.status(200).json({
+    success: true,
+    count: restaurants.length,
+    ...paginationMeta(total, pagination),
+    restaurants,
+  });
 };
+
 // get featured restaurants for homepage / dashboard
 // GET /api/restaurants/featured
 // @access Public
 export const getFeaturedRestaurant = async (
-  req: Request,
+  _req: Request,
   res: Response,
 ): Promise<void> => {
-  try {
-    const restaurants = await Restaurant.find({
-      status: "approved",
-      featured: true,
-    })
-      .sort({ rating: -1 }) // highest rated first
-      .limit(6);            // only show top 6 on the homepage
+  const restaurants = await Restaurant.find({
+    status: "approved",
+    featured: true,
+  })
+    .sort({ rating: -1, reviewCount: -1 })
+    .limit(6);
 
-    res.status(200).json({
-      success: true,
-      count: restaurants.length,
-      restaurants,
-    });
-  } catch (error: any) {
-    console.error("Error in getFeaturedRestaurant:", error);
-    res.status(500).json({ message: error.message || "Server Error" });
-  }
+  res.status(200).json({
+    success: true,
+    count: restaurants.length,
+    restaurants,
+  });
 };
+
 // get a single restaurant by its slug
 // GET /api/restaurants/:slug
 // @access Public
@@ -114,35 +143,24 @@ export const getRestaurantBySlug = async (
   req: Request,
   res: Response,
 ): Promise<void> => {
-  try {
-    const { slug } = req.params;
+  const slug = firstString(req.params.slug);
 
-    // Guard: ensure slug is a plain string (req.params can be string | string[] | undefined)
-    if (!slug || typeof slug !== "string") {
-      res.status(400).json({ message: "Invalid restaurant slug" });
-      return;
-    }
-
-    const restaurant = await Restaurant.findOne({
-      slug: slug,          // now TypeScript knows for sure it's a string
-      status: "approved",
-    }).populate("owner", "name email"); // attach owner name & email
-
-    // if no restaurant found with that slug, return 404
-    if (!restaurant) {
-      res.status(404).json({ message: "Restaurant not found" });
-      return;
-    }
-
-    res.status(200).json({
-      success: true,
-      restaurant,
-    });
-  } catch (error: any) {
-    console.error("Error in getRestaurantBySlug:", error);
-    res.status(500).json({ message: error.message || "Server Error" });
+  if (!slug) {
+    throw badRequest("Invalid restaurant slug");
   }
+
+  const restaurant = await Restaurant.findOne({
+    slug,
+    status: "approved",
+  }).populate("owner", "name email");
+
+  if (!restaurant) {
+    throw notFound("Restaurant not found");
+  }
+
+  res.status(200).json({ success: true, restaurant });
 };
+
 // get time slot availability for a restaurant on a specific date
 // GET /api/restaurants/:id/availability?date=2026-10-15&guests=2
 // @access Public
@@ -150,82 +168,79 @@ export const getRestaurantAvailability = async (
   req: Request,
   res: Response,
 ): Promise<void> => {
-  try {
-    const { id } = req.params;
-    const { date, guests } = req.query;
+  const id = firstString(req.params.id);
+  const dateParam = firstString(req.query.date);
 
-    // --- 1. Validate inputs ---
-    if (!id || typeof id !== "string") {
-      res.status(400).json({ message: "Invalid restaurant ID" });
-      return;
-    }
-
-    if (!date || typeof date !== "string") {
-      res.status(400).json({ message: "date query param is required (e.g. ?date=2026-10-15)" });
-      return;
-    }
-
-    const guestCount = parseInt(guests as string) || 1;
-
-    // --- 2. Find the restaurant ---
-    const restaurant = await Restaurant.findById(id);
-    if (!restaurant) {
-      res.status(404).json({ message: "Restaurant not found" });
-      return;
-    }
-
-    // --- 3. Build start & end of the requested date (full day range) ---
-    const dayStart = new Date(date);
-    dayStart.setUTCHours(0, 0, 0, 0);
-    const dayEnd = new Date(date);
-    dayEnd.setUTCHours(23, 59, 59, 999);
-
-    // --- 4. Aggregate booked seats per time slot in one DB round-trip ---
-    const bookedPerSlot = await Booking.aggregate<{
-      _id: string;
-      bookedSeats: number;
-    }>([
-      {
-        $match: {
-          restaurant: restaurant._id,
-          date: { $gte: dayStart, $lte: dayEnd },
-          status: { $in: ["pending", "confirmed"] }, // exclude cancelled
-        },
-      },
-      {
-        $group: {
-          _id: "$timeSlot",           // group by time slot
-          bookedSeats: { $sum: "$guests" },
-        },
-      },
-    ]);
-
-    // Turn the aggregation result into a quick lookup map: { "7:00 PM": 8, ... }
-    const bookedMap = new Map(
-      bookedPerSlot.map(({ _id, bookedSeats }) => [_id, bookedSeats]),
-    );
-
-    // Build the slot list with real remaining capacity
-    const slots = restaurant.availableSlots.map((time) => {
-      const alreadyBooked = bookedMap.get(time) ?? 0;
-      const availableSeats = restaurant.totalSeats - alreadyBooked;
-      return {
-        time,
-        availableSeats,
-        isAvailable: availableSeats >= guestCount,
-      };
-    });
-
-    res.status(200).json({
-      success: true,
-      date,
-      totalSeats: restaurant.totalSeats,
-      slots,
-    });
-  } catch (error: any) {
-    console.error("Error in getRestaurantAvailability:", error);
-    res.status(500).json({ message: error.message || "Server Error" });
+  if (!id || !Types.ObjectId.isValid(id)) {
+    throw badRequest("Invalid restaurant ID");
   }
+
+  if (!dateParam) {
+    throw badRequest("date query param is required (e.g. ?date=2026-10-15)");
+  }
+
+  const requestedDate = new Date(dateParam);
+  if (Number.isNaN(requestedDate.getTime())) {
+    throw badRequest("Invalid date");
+  }
+
+  const requestedGuests = Number(firstString(req.query.guests) ?? 1);
+  const guestCount = Number.isInteger(requestedGuests) && requestedGuests >= 1
+    ? requestedGuests
+    : 1;
+
+  const restaurant = await Restaurant.findById(id);
+  if (!restaurant) {
+    throw notFound("Restaurant not found");
+  }
+
+  const dayStart = new Date(requestedDate);
+  dayStart.setUTCHours(0, 0, 0, 0);
+  const dayEnd = new Date(requestedDate);
+  dayEnd.setUTCHours(23, 59, 59, 999);
+
+  // Seats already booked per slot, in one DB round-trip
+  const bookedPerSlot = await Booking.aggregate<{
+    _id: string;
+    bookedSeats: number;
+  }>([
+    {
+      $match: {
+        restaurant: restaurant._id,
+        date: { $gte: dayStart, $lte: dayEnd },
+        status: { $in: ["pending", "confirmed"] },
+      },
+    },
+    {
+      $group: {
+        _id: "$timeSlot",
+        bookedSeats: { $sum: "$guests" },
+      },
+    },
+  ]);
+
+  const bookedMap = new Map(
+    bookedPerSlot.map(({ _id, bookedSeats }) => [_id, bookedSeats]),
+  );
+
+  const slots = restaurant.availableSlots.map((time) => {
+    const alreadyBooked = bookedMap.get(time) ?? 0;
+    const availableSeats = Math.max(0, restaurant.totalSeats - alreadyBooked);
+
+    return {
+      time,
+      availableSeats,
+      isAvailable: availableSeats >= guestCount,
+    };
+  });
+
+  res.status(200).json({
+    success: true,
+    date: dateParam,
+    totalSeats: restaurant.totalSeats,
+    guests: guestCount,
+    slots,
+  });
 };
 
 // ─── OWNER ROUTES ────────────────────────────────────────────────────────────
@@ -237,25 +252,17 @@ export const getMyRestaurants = async (
   req: AuthRequest,
   res: Response,
 ): Promise<void> => {
-  try {
-    if (!req.user) {
-      res.status(401).json({ message: "Not authorised" });
-      return;
-    }
+  if (!req.user) throw unauthorized();
 
-    const restaurants = await Restaurant.find({ owner: req.user._id }).sort({
-      createdAt: -1,
-    });
+  const restaurants = await Restaurant.find({ owner: req.user._id }).sort({
+    createdAt: -1,
+  });
 
-    res.status(200).json({
-      success: true,
-      count: restaurants.length,
-      restaurants,
-    });
-  } catch (error: any) {
-    console.error("Error in getMyRestaurants:", error);
-    res.status(500).json({ message: error.message || "Server Error" });
-  }
+  res.status(200).json({
+    success: true,
+    count: restaurants.length,
+    restaurants,
+  });
 };
 
 // @desc  Create a new restaurant listing (starts as "pending" until admin approves)
@@ -265,92 +272,71 @@ export const createRestaurant = async (
   req: AuthRequest,
   res: Response,
 ): Promise<void> => {
+  if (!req.user) throw unauthorized();
+
+  const uploadedImage = req.fileUrl ?? "";
+
   try {
-    if (!req.user) {
-      res.status(401).json({ message: "Not authorised" });
-      return;
+    const name = cleanString(req.body?.name);
+    const description = cleanString(req.body?.description);
+    const cuisine = cleanString(req.body?.cuisine);
+    const location = cleanString(req.body?.location);
+    const address = cleanString(req.body?.address);
+
+    if (!name || !description || !cuisine || !location || !address) {
+      throw badRequest(
+        "name, description, cuisine, location and address are required",
+      );
     }
 
-    const {
+    const priceRange = parsePriceRange(req.body?.priceRange, "$$");
+
+    const seats = req.body?.totalSeats === undefined || req.body?.totalSeats === ""
+      ? DEFAULT_TOTAL_SEATS
+      : toPositiveInt(req.body.totalSeats);
+
+    if (seats === null) {
+      throw badRequest("totalSeats must be a whole number of at least 1");
+    }
+
+    if (seats > MAX_TOTAL_SEATS) {
+      throw badRequest(`totalSeats cannot exceed ${MAX_TOTAL_SEATS}`);
+    }
+
+    const availableSlots = parseSlots(req.body?.availableSlots);
+    if (availableSlots.length === 0) {
+      throw badRequest("availableSlots must contain at least one time slot");
+    }
+
+    const restaurant = await Restaurant.create({
       name,
+      slug: buildSlug(name),
       description,
       cuisine,
       priceRange,
       location,
       address,
-      image,
-      chef,
-      tags,
+      image: uploadedImage || cleanString(req.body?.image),
+      chef: cleanString(req.body?.chef),
+      tags: toStringArray(req.body?.tags),
       availableSlots,
-      totalSeats,
-      featured,
-      exclusive,
-    } = req.body;
-
-    // Public Cloudinary URL set by the upload middleware
-    const uploadedImage = req.fileUrl ?? "";
-
-    if (!name || !description || !cuisine || !location || !address) {
-      // Drop the upload rather than leaving an orphaned file in storage
-      await removeUploadedImage(uploadedImage);
-      res.status(400).json({
-        message: "name, description, cuisine, location and address are required",
-      });
-      return;
-    }
-
-    const seats =
-      totalSeats === undefined || totalSeats === ""
-        ? 20
-        : toPositiveInt(totalSeats);
-
-    if (seats === null) {
-      await removeUploadedImage(uploadedImage);
-      res.status(400).json({
-        message: "totalSeats must be a whole number of at least 1",
-      });
-      return;
-    }
-
-    // Auto-generate a URL-friendly slug from the restaurant name
-    const baseSlug = name
-      .toLowerCase()
-      .trim()
-      .replace(/[^a-z0-9\s-]/g, "")
-      .replace(/\s+/g, "-");
-
-    // Append a short random suffix to keep slugs unique
-    const slug = `${baseSlug}-${Date.now().toString(36)}`;
-
-    const restaurant = await Restaurant.create({
-      name,
-      slug,
-      description,
-      cuisine,
-      priceRange: priceRange ?? "$$",
-      location,
-      address,
-      image:
-        uploadedImage ||
-        (typeof image === "string" && image.trim() ? image.trim() : ""),
-      chef: chef ?? "",
-      tags: toStringArray(tags),
-      availableSlots: toStringArray(availableSlots),
       totalSeats: seats,
-      featured: featured ?? false,
-      exclusive: exclusive ?? false,
+      featured: req.body?.featured === true,
+      exclusive: req.body?.exclusive === true,
       owner: req.user._id,
-      status: "pending", // admin must approve before it goes live
+      status: "pending",
     });
 
     res.status(201).json({
       success: true,
-      message: "Restaurant submitted for review. It will go live once approved by an admin.",
+      message:
+        "Restaurant submitted for review. It will go live once approved by an admin.",
       restaurant,
     });
-  } catch (error: any) {
-    console.error("Error in createRestaurant:", error);
-    res.status(500).json({ message: error.message || "Server Error" });
+  } catch (error) {
+    // Never leave an orphaned upload behind when validation fails
+    await removeUploadedImage(uploadedImage);
+    throw error;
   }
 };
 
@@ -361,152 +347,151 @@ export const updateRestaurant = async (
   req: AuthRequest,
   res: Response,
 ): Promise<void> => {
+  if (!req.user) throw unauthorized();
+
+  const { id } = req.params;
+  const restaurant = await Restaurant.findById(id);
+
+  if (!restaurant) {
+    throw notFound("Restaurant not found");
+  }
+
+  const isOwner = restaurant.owner.toString() === req.user._id.toString();
+  if (!isOwner && req.user.role !== "admin") {
+    throw forbidden("Not authorised to update this restaurant");
+  }
+
+  const body = req.body ?? {};
+
   try {
-    if (!req.user) {
-      res.status(401).json({ message: "Not authorised" });
-      return;
-    }
-
-    const { id } = req.params;
-    const restaurant = await Restaurant.findById(id);
-
-    if (!restaurant) {
-      res.status(404).json({ message: "Restaurant not found" });
-      return;
-    }
-
-    // Only the owner (or an admin) can update it
-    if (
-      restaurant.owner.toString() !== req.user._id.toString() &&
-      req.user.role !== "admin"
-    ) {
-      res.status(403).json({ message: "Not authorised to update this restaurant" });
-      return;
-    }
-
-    // Validate capacity before mutating anything
-    const seats =
-      req.body.totalSeats === undefined
-        ? null
-        : toPositiveInt(req.body.totalSeats);
-
-    if (req.body.totalSeats !== undefined && seats === null) {
-      // The request is invalid — don't leave the upload behind
-      await removeUploadedImage(req.fileUrl);
-      res.status(400).json({
-        message: "totalSeats must be a whole number of at least 1",
-      });
-      return;
-    }
-
-    const previousImage = restaurant.image;
-
-    // Fields that owners are allowed to update
-    // (status is intentionally excluded — only admins change that)
-    const allowedFields = [
-      "name",
-      "description",
-      "cuisine",
-      "priceRange",
-      "location",
-      "address",
-      "chef",
-    ];
-
-    allowedFields.forEach((field) => {
-      if (req.body[field] !== undefined) {
-        (restaurant as any)[field] = req.body[field];
+    if (body.totalSeats !== undefined) {
+      const seats = toPositiveInt(body.totalSeats);
+      if (seats === null) {
+        throw badRequest("totalSeats must be a whole number of at least 1");
       }
-    });
-
-    if (req.body.tags !== undefined) {
-      restaurant.tags = toStringArray(req.body.tags);
-    }
-
-    if (req.body.availableSlots !== undefined) {
-      restaurant.availableSlots = toStringArray(req.body.availableSlots);
-    }
-
-    if (seats !== null) {
+      if (seats > MAX_TOTAL_SEATS) {
+        throw badRequest(`totalSeats cannot exceed ${MAX_TOTAL_SEATS}`);
+      }
       restaurant.totalSeats = seats;
     }
 
-    // A new upload replaces the stored image; otherwise keep the existing one
-    if (req.file) {
-      restaurant.image = req.fileUrl ?? restaurant.image;
-    } else if (
-      typeof req.body.image === "string" &&
-      req.body.image.trim()
-    ) {
-      restaurant.image = req.body.image.trim();
+    // Only these fields are owner-editable; status stays admin-only.
+    if (body.name !== undefined) {
+      const name = cleanString(body.name);
+      if (!name) throw badRequest("name cannot be empty");
+      // Regenerating the slug on every save would break shared links, so only
+      // do it when the name actually changed.
+      if (name !== restaurant.name) {
+        restaurant.name = name;
+        restaurant.slug = buildSlug(name);
+      }
     }
 
-    // If the name changed, regenerate the slug
-    if (req.body.name) {
-      const baseSlug = req.body.name
-        .toLowerCase()
-        .trim()
-        .replace(/[^a-z0-9\s-]/g, "")
-        .replace(/\s+/g, "-");
-      restaurant.slug = `${baseSlug}-${Date.now().toString(36)}`;
+    if (body.description !== undefined) {
+      const description = cleanString(body.description);
+      if (!description) throw badRequest("description cannot be empty");
+      restaurant.description = description;
     }
 
-    await restaurant.save();
-
-    // The replacement was stored, so the old image is safe to delete
-    if (req.file && previousImage !== restaurant.image) {
-      await removeUploadedImage(previousImage);
+    if (body.cuisine !== undefined) {
+      const cuisine = cleanString(body.cuisine);
+      if (!cuisine) throw badRequest("cuisine cannot be empty");
+      restaurant.cuisine = cuisine;
     }
 
-    res.status(200).json({
-      success: true,
-      message: "Restaurant updated successfully",
-      restaurant,
-    });
-  } catch (error: any) {
-    console.error("Error in updateRestaurant:", error);
-    res.status(500).json({ message: error.message || "Server Error" });
+    if (body.priceRange !== undefined) {
+      restaurant.priceRange = parsePriceRange(body.priceRange, restaurant.priceRange);
+    }
+
+    if (body.location !== undefined) {
+      const location = cleanString(body.location);
+      if (!location) throw badRequest("location cannot be empty");
+      restaurant.location = location;
+    }
+
+    if (body.address !== undefined) {
+      const address = cleanString(body.address);
+      if (!address) throw badRequest("address cannot be empty");
+      restaurant.address = address;
+    }
+
+    if (body.chef !== undefined) {
+      restaurant.chef = cleanString(body.chef);
+    }
+
+    if (body.tags !== undefined) {
+      restaurant.tags = toStringArray(body.tags);
+    }
+
+    if (body.availableSlots !== undefined) {
+      const availableSlots = parseSlots(body.availableSlots);
+      if (availableSlots.length === 0) {
+        throw badRequest("availableSlots must contain at least one time slot");
+      }
+      restaurant.availableSlots = availableSlots;
+    }
+  } catch (error) {
+    await removeUploadedImage(req.fileUrl);
+    throw error;
   }
+
+  const previousImage = restaurant.image;
+
+  // A new upload replaces the stored image; otherwise keep the existing one
+  if (req.file) {
+    restaurant.image = req.fileUrl ?? restaurant.image;
+  } else if (typeof body.image === "string" && body.image.trim()) {
+    restaurant.image = body.image.trim();
+  }
+
+  await restaurant.save();
+
+  // The replacement is stored, so the old image is safe to delete
+  if (req.file && previousImage !== restaurant.image) {
+    await removeUploadedImage(previousImage);
+  }
+
+  res.status(200).json({
+    success: true,
+    message: "Restaurant updated successfully",
+    restaurant,
+  });
 };
 
-// @desc  Delete own restaurant
+// @desc  Delete own restaurant (and its bookings/reviews)
 // DELETE /api/restaurants/:id
 // @access Owner
 export const deleteRestaurant = async (
   req: AuthRequest,
   res: Response,
 ): Promise<void> => {
-  try {
-    if (!req.user) {
-      res.status(401).json({ message: "Not authorised" });
-      return;
-    }
+  if (!req.user) throw unauthorized();
 
-    const { id } = req.params;
-    const restaurant = await Restaurant.findById(id);
+  const { id } = req.params;
+  const restaurant = await Restaurant.findById(id);
 
-    if (!restaurant) {
-      res.status(404).json({ message: "Restaurant not found" });
-      return;
-    }
-
-    // Only the owner (or an admin) can delete it
-    if (
-      restaurant.owner.toString() !== req.user._id.toString() &&
-      req.user.role !== "admin"
-    ) {
-      res.status(403).json({ message: "Not authorised to delete this restaurant" });
-      return;
-    }
-
-    await restaurant.deleteOne();
-
-    res.status(200).json({
-      success: true,
-      message: "Restaurant deleted successfully",
-    });
-  } catch (error: any) {
-    console.error("Error in deleteRestaurant:", error);
-    res.status(500).json({ message: error.message || "Server Error" });
+  if (!restaurant) {
+    throw notFound("Restaurant not found");
   }
+
+  const isOwner = restaurant.owner.toString() === req.user._id.toString();
+  if (!isOwner && req.user.role !== "admin") {
+    throw forbidden("Not authorised to delete this restaurant");
+  }
+
+  // Deleting a venue removes everything that cannot exist without it, so the
+  // database is left with no bookings or reviews pointing at a missing venue.
+  await Promise.all([
+    Booking.deleteMany({ restaurant: restaurant._id }),
+    Review.deleteMany({ restaurant: restaurant._id }),
+  ]);
+
+  const imageUrl = restaurant.image;
+  await restaurant.deleteOne();
+  await removeUploadedImage(imageUrl);
+
+  res.status(200).json({
+    success: true,
+    message: "Restaurant deleted successfully",
+  });
 };
