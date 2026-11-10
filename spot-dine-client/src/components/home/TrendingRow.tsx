@@ -1,14 +1,15 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { Link } from "react-router-dom";
 import { ArrowRight } from "lucide-react";
 import RestaurantCard from "../RestaurantCard.tsx";
+import type { Restaurant } from "../../types.ts";
 
 interface TrendingRowProps {
-    trending: any[];
+    trending: Restaurant[];
     loading: boolean;
+    error?: string | null;
 }
 
-export default function TrendingRow({ trending, loading }: TrendingRowProps) {
+export default function TrendingRow({ trending, loading, error }: TrendingRowProps) {
     return (
         <section className="py-24 bg-surface-container-low/50">
             <div className="max-w-7xl mx-auto px-6 md:px-10">
@@ -30,6 +31,20 @@ export default function TrendingRow({ trending, loading }: TrendingRowProps) {
                 {loading ? (
                     <div className="flex justify-center py-16">
                         <div className="w-8 h-8 border-2 border-outline-variant/30 border-t-secondary rounded-full animate-spin"></div>
+                    </div>
+                ) : error ? (
+                    <p className="text-xs text-black/55 py-16 text-center">{error}</p>
+                ) : trending.length === 0 ? (
+                    <div className="py-16 text-center">
+                        <p className="text-sm text-black/55 mb-4">
+                            No restaurants are listed yet — check back soon.
+                        </p>
+                        <Link
+                            to="/search"
+                            className="text-xs text-secondary hover:text-primary tracking-widest uppercase transition-colors"
+                        >
+                            Browse all
+                        </Link>
                     </div>
                 ) : (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">

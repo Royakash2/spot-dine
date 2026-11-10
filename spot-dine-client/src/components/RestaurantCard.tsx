@@ -1,22 +1,9 @@
 import { Link, useNavigate } from "react-router-dom";
 import { Star, MapPinIcon } from "lucide-react";
-import { dummyRating } from "../assets/assets.ts";
+import type { Restaurant } from "../types.ts";
 
 interface RestaurantCardProps {
-    restaurant: {
-        _id: string;
-        name: string;
-        slug: string;
-        cuisine: string;
-        priceRange: string;
-        rating: number;
-        reviewCount: number;
-        location: string;
-        image: string;
-        availableSlots: string[];
-        featured?: boolean;
-        exclusive?: boolean;
-    };
+    restaurant: Restaurant;
 }
 
 export default function RestaurantCard({ restaurant }: RestaurantCardProps) {
@@ -68,7 +55,7 @@ export default function RestaurantCard({ restaurant }: RestaurantCardProps) {
                             <span className="text-black/55/30 text-xs">•</span>
                             <div className="flex items-center gap-0.5 text-secondary">
                                 <Star size={12} fill="currentColor" />
-                                <span className="text-xs font-medium text-primary">{dummyRating.toFixed(1)}</span>
+                                <span className="text-xs font-medium text-primary">{restaurant.rating.toFixed(1)}</span>
                             </div>
                         </div>
                     </div>

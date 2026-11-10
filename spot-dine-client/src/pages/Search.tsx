@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { useState, useEffect } from "react";
 import { useSearchParams } from "react-router-dom";
 import Navbar from "../components/Navbar.tsx";
@@ -6,12 +5,18 @@ import Footer from "../components/Footer.tsx";
 import RestaurantCard from "../components/RestaurantCard.tsx";
 import AuthModal from "../components/AuthModal.tsx";
 import { SlidersHorizontal, Search as SearchIcon, X, Check, MapPin, SearchXIcon } from "lucide-react";
-import { dummyRestaurant } from "../assets/assets.ts";
+import { restaurantApi, type RestaurantQuery } from "../lib/api.ts";
+import type { PaginationMeta, Restaurant } from "../types.ts";
+
+const PAGE_SIZE = 12;
 
 export default function Search() {
     const [searchParams, setSearchParams] = useSearchParams();
-    const [restaurants, setRestaurants] = useState<any[]>([]);
+    const [restaurants, setRestaurants] = useState<Restaurant[]>([]);
+    const [meta, setMeta] = useState<PaginationMeta | null>(null);
     const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
+    const [retryCount, setRetryCount] = useState(0);
 
     // UI Layout states
     const [showMobileFilters, setShowMobileFilters] = useState(false);
@@ -22,6 +27,7 @@ export default function Search() {
     const cuisinesSelected = searchParams.getAll("cuisine");
     const pricesSelected = searchParams.getAll("priceRange");
     const sortVal = searchParams.get("sort") || "";
+    const pageVal = Math.max(1, Number(searchParams.get("page")) || 1);
 
     // Temp text inputs for immediate user typing (submit on enter/click)
     const [tempSearch, setTempSearch] = useState(searchVal);
@@ -35,14 +41,61 @@ export default function Search() {
         })();
     }, [searchVal, locationVal]);
 
+    // Filter values are derived from searchParams, so the URL is the single
+    // source of truth for what the results should be.
     useEffect(() => {
+        let cancelled = false;
+
         const fetchRestaurants = async () => {
-            setRestaurants(dummyRestaurant);
-            setLoading(false);
+            setLoading(true);
+            setError(null);
+
+            try {
+                const data = await restaurantApi.list({
+                    search: searchVal || undefined,
+                    location: locationVal || undefined,
+                    cuisine: cuisinesSelected,
+                    priceRange: pricesSelected,
+                    sort: (sortVal || undefined) as RestaurantQuery["sort"],
+                    page: pageVal,
+                    limit: PAGE_SIZE,
+                });
+
+                if (!cancelled) {
+                    setRestaurants(data.restaurants);
+                    setMeta(data);
+                }
+            } catch (err) {
+                if (!cancelled) {
+                    setRestaurants([]);
+                    setMeta(null);
+                    setError(err instanceof Error ? err.message : "Could not load restaurants");
+                }
+            } finally {
+                if (!cancelled) setLoading(false);
+            }
         };
 
-        fetchRestaurants();
-    }, [searchParams]);
+        void fetchRestaurants();
+        return () => {
+            cancelled = true;
+        };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [searchParams, retryCount]);
+
+    // Any filter change starts again from the first page.
+    const applyParams = (nextParams: URLSearchParams) => {
+        nextParams.delete("page");
+        setSearchParams(nextParams);
+    };
+
+    const goToPage = (page: number) => {
+        const nextParams = new URLSearchParams(searchParams);
+        if (page > 1) nextParams.set("page", String(page));
+        else nextParams.delete("page");
+        setSearchParams(nextParams);
+        window.scrollTo({ top: 0, behavior: "smooth" });
+    };
 
     const handleTextSubmit = (e: React.FormEvent) => {
         e.preventDefault();
@@ -53,7 +106,7 @@ export default function Search() {
         if (tempLocation) nextParams.set("location", tempLocation);
         else nextParams.delete("location");
 
-        setSearchParams(nextParams);
+        applyParams(nextParams);
     };
 
     const handleCuisineToggle = (cuisine: string) => {
@@ -69,7 +122,7 @@ export default function Search() {
             // Add
             nextParams.append("cuisine", cuisine);
         }
-        setSearchParams(nextParams);
+        applyParams(nextParams);
     };
 
     const handlePriceToggle = (price: string) => {
@@ -83,7 +136,7 @@ export default function Search() {
         } else {
             nextParams.append("priceRange", price);
         }
-        setSearchParams(nextParams);
+        applyParams(nextParams);
     };
 
     const handleSortChange = (sort: string) => {
@@ -93,7 +146,7 @@ export default function Search() {
         } else {
             nextParams.delete("sort");
         }
-        setSearchParams(nextParams);
+        applyParams(nextParams);
     };
 
     const clearAllFilters = () => {
@@ -223,7 +276,7 @@ export default function Search() {
                 <div className="flex-1 flex flex-col">
                     <div className="flex justify-between items-center mb-8 pb-4 border-b border-outline-variant/10">
                         <p className="text-sm text-black/55">
-                            {restaurants.length} {restaurants.length === 1 ? "Restaurant" : "Restaurants"} Available
+                            {meta?.total ?? 0} {meta?.total === 1 ? "Restaurant" : "Restaurants"} Available
                         </p>
 
                         <div className="flex items-center gap-2">
@@ -234,6 +287,7 @@ export default function Search() {
                                 className="text-xs bg-transparent border border-outline-variant/30 px-3 py-1.5 focus:outline-none cursor-pointer rounded-sm"
                             >
                                 <option value="">Default (Newest)</option>
+                                <option value="rating">Top Rated</option>
                                 <option value="price_low">Price: Low to High</option>
                                 <option value="price_high">Price: High to Low</option>
                             </select>
@@ -243,6 +297,17 @@ export default function Search() {
                     {loading ? (
                         <div className="grow flex justify-center items-center py-24">
                             <div className="w-10 h-10 border-2 border-outline-variant/30 border-t-secondary rounded-full animate-spin"></div>
+                        </div>
+                    ) : error ? (
+                        <div className="grow flex flex-col items-center justify-center py-24 text-center">
+                            <h3 className="font-display text-xl font-medium mb-2">Could not load restaurants</h3>
+                            <p className="text-xs text-black/50 max-w-sm mb-6">{error}</p>
+                            <button
+                                onClick={() => setRetryCount((count) => count + 1)}
+                                className="bg-primary hover:bg-secondary text-white text-xs tracking-widest uppercase px-6 py-3 transition-colors cursor-pointer"
+                            >
+                                TRY AGAIN
+                            </button>
                         </div>
                     ) : restaurants.length === 0 ? (
                         <div className="grow flex flex-col items-center justify-center py-24 text-center">
@@ -259,14 +324,44 @@ export default function Search() {
                             </button>
                         </div>
                     ) : (
-                        <div className="flex flex-col lg:flex-row gap-6 grow">
-                            {/* Restaurants List Grid */}
-                            <div className="grid gap-6 grow grid-cols-1 lg:grid-cols-2 ">
-                                {restaurants.map((restaurant) => (
-                                    <RestaurantCard key={restaurant._id} restaurant={restaurant} />
-                                ))}
+                        <>
+                            <div className="flex flex-col lg:flex-row gap-6 grow">
+                                {/* Restaurants List Grid */}
+                                <div className="grid gap-6 grow grid-cols-1 lg:grid-cols-2 ">
+                                    {restaurants.map((restaurant) => (
+                                        <RestaurantCard key={restaurant._id} restaurant={restaurant} />
+                                    ))}
+                                </div>
                             </div>
-                        </div>
+
+                            {meta && meta.totalPages > 1 && (
+                                <div className="flex flex-wrap items-center justify-between gap-4 border-t border-outline-variant/10 mt-8 pt-6">
+                                    <p className="text-xs text-black/55">
+                                        Showing {(meta.page - 1) * meta.limit + 1}–
+                                        {Math.min(meta.page * meta.limit, meta.total)} of {meta.total}
+                                    </p>
+                                    <div className="flex items-center gap-2">
+                                        <button
+                                            onClick={() => goToPage(meta.page - 1)}
+                                            disabled={!meta.hasPrevPage}
+                                            className="px-4 py-2 text-[10px] font-medium tracking-widest uppercase border border-outline-variant/50 hover:border-primary transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                                        >
+                                            PREV
+                                        </button>
+                                        <span className="text-xs text-black/55 px-2">
+                                            Page {meta.page} of {meta.totalPages}
+                                        </span>
+                                        <button
+                                            onClick={() => goToPage(meta.page + 1)}
+                                            disabled={!meta.hasNextPage}
+                                            className="px-4 py-2 text-[10px] font-medium tracking-widest uppercase border border-outline-variant/50 hover:border-primary transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                                        >
+                                            NEXT
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+                        </>
                     )}
                 </div>
             </main>
