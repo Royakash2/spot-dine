@@ -91,17 +91,6 @@ export const cuisines = [
     { name: "Vegetarian", icon: LeafIcon, label: "VEGETARIAN" },
 ];
 
-export const dummyUser = {
-    _id: "6a32a3c50e88c825d8873f75",
-    name: "Alex Mercer",
-    email: "alex@example.com",
-    phone: "+01234567788",
-    role: "owner",
-    token: "xyz",
-    createdAt: "2026-06-17T13:40:21.669Z",
-    updatedAt: "2026-06-17T13:40:21.669Z",
-};
-
 export const dummyRestaurant = [
     {
         _id: "6a32a3c50e88c825d8873f7d",
