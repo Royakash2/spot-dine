@@ -1,5 +1,11 @@
 import axios, { AxiosError } from "axios";
-import type { AuthResponse, Role, User } from "../types.ts";
+import type {
+    AuthResponse,
+    PaginationMeta,
+    Restaurant,
+    Role,
+    User,
+} from "../types.ts";
 
 const TOKEN_KEY = "token";
 
@@ -78,6 +84,54 @@ interface RegisterPayload {
     phone?: string;
     role?: Extract<Role, "user" | "owner">;
 }
+
+export interface RestaurantQuery {
+    search?: string;
+    location?: string;
+    cuisine?: string[];
+    priceRange?: string[];
+    sort?: "price_low" | "price_high" | "rating" | "";
+    page?: number;
+    limit?: number;
+}
+
+export interface RestaurantListResponse extends PaginationMeta {
+    success: true;
+    count: number;
+    restaurants: Restaurant[];
+}
+
+// Repeated keys (cuisine=Italian&cuisine=French) is what the API expects;
+// axios' default array serialization would send cuisine[]=... instead.
+const toSearchParams = (query: RestaurantQuery): URLSearchParams => {
+    const params = new URLSearchParams();
+
+    if (query.search) params.set("search", query.search);
+    if (query.location) params.set("location", query.location);
+    if (query.sort) params.set("sort", query.sort);
+    if (query.page && query.page > 1) params.set("page", String(query.page));
+    if (query.limit) params.set("limit", String(query.limit));
+    query.cuisine?.forEach((cuisine) => params.append("cuisine", cuisine));
+    query.priceRange?.forEach((price) => params.append("priceRange", price));
+
+    return params;
+};
+
+export const restaurantApi = {
+    async list(query: RestaurantQuery = {}): Promise<RestaurantListResponse> {
+        const { data } = await api.get<RestaurantListResponse>("/restaurants", {
+            params: toSearchParams(query),
+        });
+        return data;
+    },
+
+    async featured(): Promise<Restaurant[]> {
+        const { data } = await api.get<{ success: true; count: number; restaurants: Restaurant[] }>(
+            "/restaurants/featured",
+        );
+        return data.restaurants;
+    },
+};
 
 export const authApi = {
     async login(email: string, password: string): Promise<AuthResponse> {
