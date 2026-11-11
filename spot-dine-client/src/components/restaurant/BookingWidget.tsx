@@ -1,15 +1,16 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { Calendar, Users } from "lucide-react";
+import type { Restaurant, SlotAvailability } from "../../types.ts";
+import { todayInputValue } from "../../lib/date.ts";
 
 interface BookingWidgetProps {
-    restaurant: any;
+    restaurant: Restaurant;
     selectedDate: string;
     setSelectedDate: (date: string) => void;
     selectedGuests: string;
     setSelectedGuests: (guests: string) => void;
     selectedSlot: string;
     setSelectedSlot: (slot: string) => void;
-    slotsAvailability: any[];
+    slotsAvailability: SlotAvailability[];
     loadingSlots: boolean;
     isAuthenticated: boolean;
     handleReserveClick: () => void;
@@ -63,7 +64,7 @@ export default function BookingWidget({
                             type="date"
                             value={selectedDate}
                             onChange={(e) => setSelectedDate(e.target.value)}
-                            min={new Date().toISOString().split("T")[0]}
+                            min={todayInputValue()}
                             className="w-full bg-surface-container-low/30 pl-9 pr-3 py-2.5 text-xs border border-outline-variant/40 focus:border-secondary focus:outline-none rounded-md cursor-pointer"
                         />
                     </div>
@@ -79,17 +80,16 @@ export default function BookingWidget({
                             </div>
                         ) : (
                             (() => {
-                                const todayStr = new Date().toISOString().split("T")[0];
-                                const isToday = selectedDate === todayStr;
-                                const allSlots =
+                                const isToday = selectedDate === todayInputValue();
+                                const allSlots: SlotAvailability[] =
                                     slotsAvailability.length > 0
                                         ? slotsAvailability
-                                        : (restaurant.availableSlots || []).map((s: string) => ({
-                                              time: s,
-                                              availableSeats: 20,
+                                        : restaurant.availableSlots.map((time) => ({
+                                              time,
+                                              availableSeats: restaurant.totalSeats,
                                               isAvailable: true,
                                           }));
-                                return allSlots.filter((slotInfo: any) => {
+                                return allSlots.filter((slotInfo) => {
                                     if (!isToday) return true;
                                     const [slotHour, slotMinute] = slotInfo.time.split(":").map(Number);
                                     const now = new Date();
@@ -97,7 +97,7 @@ export default function BookingWidget({
                                     const currentMinute = now.getMinutes();
                                     return slotHour > currentHour || (slotHour === currentHour && slotMinute > currentMinute);
                                 });
-                            })().map((slotInfo: any) => {
+                            })().map((slotInfo) => {
                                 const slot = slotInfo.time;
                                 const isSelected = selectedSlot === slot;
                                 const isFull = !slotInfo.isAvailable || slotInfo.availableSeats < Number(selectedGuests);
