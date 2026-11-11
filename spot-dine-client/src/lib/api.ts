@@ -3,7 +3,9 @@ import type {
     AuthResponse,
     PaginationMeta,
     Restaurant,
+    Review,
     Role,
+    SlotAvailability,
     User,
 } from "../types.ts";
 
@@ -117,6 +119,22 @@ const toSearchParams = (query: RestaurantQuery): URLSearchParams => {
     return params;
 };
 
+export interface AvailabilityResponse {
+    success: true;
+    date: string;
+    totalSeats: number;
+    guests: number;
+    slots: SlotAvailability[];
+}
+
+export interface ReviewListResponse extends PaginationMeta {
+    success: true;
+    count: number;
+    rating: number;
+    reviewCount: number;
+    reviews: Review[];
+}
+
 export const restaurantApi = {
     async list(query: RestaurantQuery = {}): Promise<RestaurantListResponse> {
         const { data } = await api.get<RestaurantListResponse>("/restaurants", {
@@ -130,6 +148,37 @@ export const restaurantApi = {
             "/restaurants/featured",
         );
         return data.restaurants;
+    },
+
+    // Public detail pages only resolve approved restaurants; anything else is a 404.
+    async getBySlug(slug: string): Promise<Restaurant> {
+        const { data } = await api.get<{ success: true; restaurant: Restaurant }>(
+            `/restaurants/${encodeURIComponent(slug)}`,
+        );
+        return data.restaurant;
+    },
+
+    async availability(
+        id: string,
+        params: { date: string; guests?: number },
+    ): Promise<AvailabilityResponse> {
+        const { data } = await api.get<AvailabilityResponse>(
+            `/restaurants/${id}/availability`,
+            { params },
+        );
+        return data;
+    },
+};
+
+export const reviewApi = {
+    async list(
+        restaurant: string,
+        query: { page?: number; limit?: number } = {},
+    ): Promise<ReviewListResponse> {
+        const { data } = await api.get<ReviewListResponse>("/reviews", {
+            params: { restaurant, ...query },
+        });
+        return data;
     },
 };
 
