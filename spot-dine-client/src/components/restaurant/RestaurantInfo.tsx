@@ -1,12 +1,28 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { MapPin, Clock, Utensils, ChefHat } from "lucide-react";
+import type { Restaurant } from "../../types.ts";
 
 interface RestaurantInfoProps {
-    restaurant: any;
+    restaurant: Restaurant;
 }
+
+const formatTime = (time: string): string => {
+    const [hours, minutes] = time.split(":").map(Number);
+
+    if (!Number.isInteger(hours) || !Number.isInteger(minutes)) return time;
+
+    const period = hours >= 12 ? "PM" : "AM";
+    const hour = hours % 12 === 0 ? 12 : hours % 12;
+    return `${hour}:${String(minutes).padStart(2, "0")} ${period}`;
+};
 
 export default function RestaurantInfo({ restaurant }: RestaurantInfoProps) {
     if (!restaurant) return null;
+
+    const { availableSlots } = restaurant;
+    const openingHours =
+        availableSlots.length > 0
+            ? `${formatTime(availableSlots[0])} - ${formatTime(availableSlots[availableSlots.length - 1])}`
+            : "Not published";
 
     return (
         <div className="space-y-12 text-left">
@@ -25,7 +41,7 @@ export default function RestaurantInfo({ restaurant }: RestaurantInfoProps) {
                 <div className="text-center px-2">
                     <Clock className="text-secondary mx-auto mb-2" size={20} />
                     <span className="block text-[9px] tracking-wider text-black/55 uppercase">OPENING</span>
-                    <span className="text-xs text-primary mt-1 block">5:00 PM - 11:00 PM</span>
+                    <span className="text-xs text-primary mt-1 block">{openingHours}</span>
                 </div>
             </div>
 
