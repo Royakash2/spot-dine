@@ -1,6 +1,8 @@
 import axios, { AxiosError } from "axios";
 import type {
     AuthResponse,
+    Booking,
+    BookingStatus,
     PaginationMeta,
     Restaurant,
     Review,
@@ -150,6 +152,14 @@ export const restaurantApi = {
         return data.restaurants;
     },
 
+    // The signed-in owner's own listings, newest first (any status).
+    async mine(): Promise<Restaurant[]> {
+        const { data } = await api.get<{ success: true; count: number; restaurants: Restaurant[] }>(
+            "/restaurants/my",
+        );
+        return data.restaurants;
+    },
+
     // Public detail pages only resolve approved restaurants; anything else is a 404.
     async getBySlug(slug: string): Promise<Restaurant> {
         const { data } = await api.get<{ success: true; restaurant: Restaurant }>(
@@ -179,6 +189,87 @@ export const reviewApi = {
             params: { restaurant, ...query },
         });
         return data;
+    },
+};
+
+export interface CreateBookingPayload {
+    restaurantId: string;
+    date: string;
+    timeSlot: string;
+    guests: number;
+    name: string;
+    email: string;
+    phone: string;
+    occasion?: string;
+    specialRequests?: string;
+}
+
+export interface BookingResponse {
+    success: true;
+    message: string;
+    booking: Booking;
+}
+
+export interface BookingListResponse extends PaginationMeta {
+    success: true;
+    count: number;
+    bookings: Booking[];
+}
+
+export const bookingApi = {
+    async create(payload: CreateBookingPayload): Promise<BookingResponse> {
+        const { data } = await api.post<BookingResponse>("/bookings", payload);
+        return data;
+    },
+
+    async mine(): Promise<Booking[]> {
+        const { data } = await api.get<{
+            success: true;
+            count: number;
+            bookings: Booking[];
+        }>("/bookings/my");
+        return data.bookings;
+    },
+
+    // Soft-cancel: the server keeps the record and sets its status.
+    async cancel(id: string): Promise<Booking> {
+        const { data } = await api.patch<BookingResponse>(
+            `/bookings/${encodeURIComponent(id)}/cancel`,
+        );
+        return data.booking;
+    },
+
+    // Owner view: reservations for one restaurant, with the guest populated.
+    async forRestaurant(
+        restaurantId: string,
+        query: { status?: BookingStatus; date?: string; page?: number; limit?: number } = {},
+    ): Promise<BookingListResponse> {
+        const params = new URLSearchParams();
+
+        if (query.status) params.set("status", query.status);
+        if (query.date) params.set("date", query.date);
+        if (query.page && query.page > 1) params.set("page", String(query.page));
+        if (query.limit) params.set("limit", String(query.limit));
+
+        const { data } = await api.get<BookingListResponse>(
+            `/bookings/restaurant/${encodeURIComponent(restaurantId)}`,
+            { params },
+        );
+        return data;
+    },
+
+    async confirm(id: string): Promise<Booking> {
+        const { data } = await api.patch<BookingResponse>(
+            `/bookings/${encodeURIComponent(id)}/confirm`,
+        );
+        return data.booking;
+    },
+
+    async complete(id: string): Promise<Booking> {
+        const { data } = await api.patch<BookingResponse>(
+            `/bookings/${encodeURIComponent(id)}/complete`,
+        );
+        return data.booking;
     },
 };
 
