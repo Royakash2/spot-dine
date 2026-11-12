@@ -1,36 +1,132 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
-import { useState, useEffect } from "react";
-import { useAppContext } from "../../context/AppContext.tsx";
+import { useEffect, useState } from "react";
 import Navbar from "../../components/Navbar.tsx";
 import Footer from "../../components/Footer.tsx";
 import Loader from "../../components/Loader.tsx";
 import { CalendarIcon, SettingsIcon } from "lucide-react";
+import toast from "react-hot-toast";
 import RestaurantWizard from "../../components/owner/RestaurantWizard.tsx";
 import PendingApproval from "../../components/owner/PendingApproval.tsx";
 import RequestRejected from "../../components/owner/RequestRejected.tsx";
 import OwnerBookings from "../../components/owner/OwnerBookings.tsx";
 import OwnerProfileDetails from "../../components/owner/OwnerProfileDetails.tsx";
-import { dummyMyBookingsData, dummyRestaurant } from "../../assets/assets.ts";
+import { useAppContext } from "../../context/AppContext.tsx";
+import { bookingApi, restaurantApi } from "../../lib/api.ts";
+import type { Booking, BookingStatus, Restaurant } from "../../types.ts";
 
 export default function OwnerDashboard() {
     const { logout } = useAppContext();
-    const [restaurant, setRestaurant] = useState<any>(null);
-    const [bookings, setBookings] = useState<any[]>([]);
+
+    const [restaurant, setRestaurant] = useState<Restaurant | null>(null);
+    const [bookings, setBookings] = useState<Booking[]>([]);
     const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
+    const [reloadKey, setReloadKey] = useState(0);
+    const [updatingBookingId, setUpdatingBookingId] = useState<string | null>(null);
     const [activeTab, setActiveTab] = useState<"bookings" | "details">("bookings");
 
-    const fetchOwnerData = async () => {
-        setRestaurant(dummyRestaurant[0]);
-        setBookings(dummyMyBookingsData);
-        setLoading(false);
+    useEffect(() => {
+        let active = true;
+
+        restaurantApi
+            .mine()
+            .then(async (restaurants) => {
+                // An owner can have several listings; prefer the approved one so
+                // the portal opens on the restaurant that can take bookings.
+                const ownRestaurant =
+                    restaurants.find((item) => item.status === "approved") ??
+                    restaurants[0] ??
+                    null;
+                if (!active) return;
+
+                setRestaurant(ownRestaurant);
+                if (!ownRestaurant) {
+                    setBookings([]);
+                    return;
+                }
+
+                // A new listing has no reservations yet, so skip the extra call.
+                if (ownRestaurant.status !== "approved") {
+                    setBookings([]);
+                    return;
+                }
+
+                const list = await bookingApi.forRestaurant(ownRestaurant._id, { limit: 50 });
+                if (active) setBookings(list.bookings);
+            })
+            .catch((err: unknown) => {
+                if (active) {
+                    setError(
+                        err instanceof Error
+                            ? err.message
+                            : "Could not load the owner dashboard.",
+                    );
+                }
+            })
+            .finally(() => {
+                if (active) setLoading(false);
+            });
+
+        return () => {
+            active = false;
+        };
+    }, [reloadKey]);
+
+    const handleRetry = () => {
+        setLoading(true);
+        setError(null);
+        setReloadKey((key) => key + 1);
     };
 
-    useEffect(() => {
-        (async () => await fetchOwnerData())();
-    }, []);
+    const handleUpdateBookingStatus = async (booking: Booking, nextStatus: BookingStatus) => {
+        const action =
+            nextStatus === "confirmed"
+                ? bookingApi.confirm
+                : nextStatus === "completed"
+                  ? bookingApi.complete
+                  : bookingApi.cancel;
+
+        setUpdatingBookingId(booking._id);
+
+        try {
+            await action(booking._id);
+            setBookings((previous) =>
+                previous.map((item) =>
+                    item._id === booking._id ? { ...item, status: nextStatus } : item,
+                ),
+            );
+            toast.success(`Booking ${nextStatus}.`);
+        } catch (err: unknown) {
+            toast.error(err instanceof Error ? err.message : "Could not update the booking.");
+        } finally {
+            setUpdatingBookingId(null);
+        }
+    };
 
     if (loading) {
         return <Loader text="Loading Owner Dashboard..." />;
+    }
+
+    if (error) {
+        return (
+            <div className="min-h-screen bg-surface flex flex-col">
+                <Navbar />
+                <main className="grow flex items-center justify-center px-6 py-24 text-center">
+                    <div className="max-w-md space-y-4">
+                        <h1 className="font-display text-2xl md:text-3xl font-medium text-primary">
+                            Dashboard unavailable
+                        </h1>
+                        <p className="text-xs text-black/55 leading-relaxed">{error}</p>
+                        <button
+                            onClick={handleRetry}
+                            className="px-5 py-3 bg-primary text-white text-[10px] font-medium tracking-widest uppercase hover:bg-secondary transition-colors cursor-pointer"
+                        >
+                            Try Again
+                        </button>
+                    </div>
+                </main>
+                <Footer />
+            </div>
+        );
     }
 
     return (
@@ -105,7 +201,12 @@ export default function OwnerDashboard() {
                         <div className="lg:col-span-9 space-y-8">
                             {/* Tab 1: Bookings List */}
                             {activeTab === "bookings" && (
-                                <OwnerBookings bookings={bookings} setBookings={setBookings} totalSeats={restaurant.totalSeats} />
+                                <OwnerBookings
+                                    bookings={bookings}
+                                    totalSeats={restaurant.totalSeats}
+                                    updatingBookingId={updatingBookingId}
+                                    onUpdateStatus={handleUpdateBookingStatus}
+                                />
                             )}
 
                             {/* Tab 3: Update details & slots capacity */}
