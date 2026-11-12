@@ -1,17 +1,15 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { Link } from "react-router-dom";
 import { Calendar, Users, Clock, MapPin, Check } from "lucide-react";
+import { formatCalendarDate, formatTimeSlot } from "../../lib/date.ts";
+import type { Booking, Restaurant } from "../../types.ts";
 
 interface BookingSuccessProps {
-    confirmedBooking: any;
-    restaurant: any;
-    date: string;
-    slot: string;
-    guests: string;
+    booking: Booking;
+    restaurant: Restaurant;
 }
 
-export default function BookingSuccess({ confirmedBooking, restaurant, date, slot, guests }: BookingSuccessProps) {
-    if (!confirmedBooking || !restaurant) return null;
+export default function BookingSuccess({ booking, restaurant }: BookingSuccessProps) {
+    const isConfirmed = booking.status === "confirmed";
 
     return (
         <div className="max-w-xl w-full bg-white border border-outline-variant/20 p-10 text-center rounded-lg ambient-shadow space-y-8 animate-in zoom-in-95 duration-300">
@@ -20,25 +18,40 @@ export default function BookingSuccess({ confirmedBooking, restaurant, date, slo
             </div>
 
             <div className="space-y-3">
-                <h2 className="font-display text-3xl font-medium text-primary">Reservation Confirmed</h2>
+                <h2 className="font-display text-3xl font-medium text-primary">
+                    {isConfirmed ? "Reservation Confirmed" : "Booking Requested"}
+                </h2>
                 <p className="text-xs text-black/55 max-w-sm mx-auto leading-relaxed">
-                    A curated dining experience has been successfully reserved for you at{" "}
-                    <span className="text-primary">{restaurant.name}</span>.
+                    {isConfirmed ? (
+                        <>
+                            Your table at{" "}
+                            <span className="text-primary">{restaurant.name}</span> is confirmed. We
+                            look forward to seeing you.
+                        </>
+                    ) : (
+                        <>
+                            Your request at{" "}
+                            <span className="text-primary">{restaurant.name}</span> has been sent.
+                            The restaurant will confirm your table shortly.
+                        </>
+                    )}
                 </p>
             </div>
 
             {/* Confirmation Card Details */}
             <div className="bg-surface-container-low p-6 rounded-md space-y-4 text-left border border-outline-variant/10">
-                <div className="flex justify-between items-center pb-3 border-b border-outline-variant/10">
-                    <span className="text-[10px] font-medium text-black/55 tracking-wider uppercase">REFERENCE CODE</span>
-                    <span className="text-sm font-medium text-secondary">{confirmedBooking.bookingId}</span>
+                <div className="flex justify-between items-center pb-3 border-b border-outline-variant/10 gap-4">
+                    <span className="text-[10px] font-medium text-black/55 tracking-wider uppercase">
+                        REFERENCE CODE
+                    </span>
+                    <span className="text-sm font-medium text-secondary">{booking.bookingId}</span>
                 </div>
 
                 <div className="space-y-3 text-xs text-on-surface">
                     <div className="flex items-center gap-3">
                         <Calendar size={14} className="text-black/55" />
                         <span>
-                            {new Date(date).toLocaleDateString("en-US", {
+                            {formatCalendarDate(booking.date, {
                                 weekday: "long",
                                 year: "numeric",
                                 month: "long",
@@ -48,16 +61,27 @@ export default function BookingSuccess({ confirmedBooking, restaurant, date, slo
                     </div>
                     <div className="flex items-center gap-3">
                         <Clock size={14} className="text-black/55" />
-                        <span>{slot} PM</span>
+                        <span>{formatTimeSlot(booking.timeSlot)}</span>
                     </div>
                     <div className="flex items-center gap-3">
                         <Users size={14} className="text-black/55" />
-                        <span>{guests} Guests</span>
+                        <span>
+                            {booking.guests} {booking.guests === 1 ? "Guest" : "Guests"}
+                        </span>
                     </div>
                     <div className="flex items-start gap-3">
                         <MapPin size={14} className="text-black/55 mt-0.5" />
                         <span>{restaurant.address}</span>
                     </div>
+                </div>
+
+                <div className="flex items-center justify-between pt-3 border-t border-outline-variant/10 gap-4">
+                    <span className="text-[10px] font-medium text-black/55 tracking-wider uppercase">
+                        STATUS
+                    </span>
+                    <span className="inline-block py-0.5 px-2 text-[9px] font-medium tracking-wider uppercase rounded-sm bg-secondary-container/30 text-on-secondary-container">
+                        {booking.status}
+                    </span>
                 </div>
             </div>
 

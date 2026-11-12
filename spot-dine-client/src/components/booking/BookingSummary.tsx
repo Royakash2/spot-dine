@@ -1,16 +1,15 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { Calendar, Users, Clock, MapPin } from "lucide-react";
+import { formatCalendarDate, formatTimeSlot } from "../../lib/date.ts";
+import type { Restaurant } from "../../types.ts";
 
 interface BookingSummaryProps {
-    restaurant: any;
+    restaurant: Restaurant;
     date: string;
     slot: string;
     guests: string;
 }
 
 export default function BookingSummary({ restaurant, date, slot, guests }: BookingSummaryProps) {
-    if (!restaurant) return null;
-
     return (
         <div className="bg-white border border-outline-variant/20 p-6 rounded-md shadow-sm space-y-6 text-left">
             <h3 className="font-display text-lg text-primary pb-3 border-b border-outline-variant/10">Reservation Summary</h3>
@@ -36,19 +35,27 @@ export default function BookingSummary({ restaurant, date, slot, guests }: Booki
                     <span className="text-black/55 flex items-center gap-2">
                         <Calendar size={14} /> Date
                     </span>
-                    <span>{new Date(date).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</span>
+                    <span>
+                        {formatCalendarDate(date, {
+                            month: "short",
+                            day: "numeric",
+                            year: "numeric",
+                        })}
+                    </span>
                 </div>
                 <div className="flex justify-between items-center">
                     <span className="text-black/55 flex items-center gap-2">
                         <Clock size={14} /> Time
                     </span>
-                    <span>{slot} PM</span>
+                    <span>{formatTimeSlot(slot)}</span>
                 </div>
                 <div className="flex justify-between items-center">
                     <span className="text-black/55 flex items-center gap-2">
                         <Users size={14} /> Party Size
                     </span>
-                    <span>{guests} Guests</span>
+                    <span>
+                        {guests} {guests === "1" ? "Guest" : "Guests"}
+                    </span>
                 </div>
             </div>
 
