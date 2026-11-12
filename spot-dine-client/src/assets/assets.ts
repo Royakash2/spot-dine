@@ -49,9 +49,6 @@ export const dummyReviews = [
     },
 ];
 
-export const dummyRating = 4.8;
-export const dummyReviewCount = 124;
-
 export const footerSections = [
     {
         title: "COMPANY",
@@ -286,101 +283,6 @@ export const dummyRestaurant = [
     },
 ];
 
-export const dummyAvailability = [
-    { time: "18:00", availableSeats: 45, isAvailable: true },
-    { time: "19:00", availableSeats: 45, isAvailable: true },
-    { time: "20:00", availableSeats: 45, isAvailable: true },
-    { time: "21:00", availableSeats: 45, isAvailable: true },
-    { time: "22:00", availableSeats: 45, isAvailable: true },
-];
-
-export const dummyBookingData = {
-    user: "6a32a3c50e88c825d8873f75",
-    restaurant: {
-        _id: "6a32a3c50e88c825d8873f7d",
-        name: "L'Essence",
-        location: "Manhattan, NY",
-        address: "115 Greenwich St, New York, NY 10006",
-        image: "/restaurant_5.png",
-    },
-    date: "2026-06-25T00:00:00.000Z",
-    time: "22:00",
-    guests: 2,
-    occasion: "",
-    specialRequests: "",
-    status: "confirmed",
-    _id: "6a34e4caf866d0ae1e98e487",
-    createdAt: "2026-06-19T06:42:18.305Z",
-    updatedAt: "2026-06-19T06:42:18.305Z",
-    bookingId: "GR-71B448A7",
-};
-
-export const dummyMyBookingsData = [
-    {
-        _id: "6a34e4caf866d0ae1e98e487",
-        user: "6a32a3c50e88c825d8873f75",
-        restaurant: {
-            _id: "6a32a3c50e88c825d8873f7d",
-            name: "L'Essence",
-            slug: "l-essence",
-            location: "Manhattan, NY",
-            address: "115 Greenwich St, New York, NY 10006",
-            image: "/restaurant_5.png",
-        },
-        date: "2026-06-25T00:00:00.000Z",
-        time: "22:00",
-        guests: 2,
-        occasion: "",
-        specialRequests: "",
-        status: "confirmed",
-        createdAt: "2026-06-19T06:42:18.305Z",
-        updatedAt: "2026-06-19T06:42:18.305Z",
-        bookingId: "GR-71B448A7",
-    },
-    {
-        _id: "6a34e55af866d0ae1e98e489",
-        user: "6a32a3c50e88c825d8873f75",
-        restaurant: {
-            _id: "6a32a3c50e88c825d8873f7a",
-            name: "Terraza Cielo",
-            slug: "terraza-cielo",
-            location: "Manhattan, NY",
-            address: "244 Fifth Ave Rooftop, New York, NY 10001",
-            image: "/restaurant_3.jpg",
-        },
-        date: "2026-06-19T00:00:00.000Z",
-        time: "20:00",
-        guests: 2,
-        occasion: "",
-        specialRequests: "",
-        status: "confirmed",
-        createdAt: "2026-06-19T06:44:42.294Z",
-        updatedAt: "2026-06-19T06:44:42.294Z",
-        bookingId: "GR-17743C76",
-    },
-    {
-        _id: "6a34e54ff866d0ae1e98e488",
-        user: "6a32a3c50e88c825d8873f75",
-        restaurant: {
-            _id: "6a32a3c50e88c825d8873f78",
-            name: "L'Artiste",
-            slug: "l-artiste",
-            location: "Manhattan, NY",
-            address: "420 Mercer St, New York, NY 10003",
-            image: "/restaurant_4.png",
-        },
-        date: "2026-06-19T00:00:00.000Z",
-        time: "19:00",
-        guests: 2,
-        occasion: "",
-        specialRequests: "",
-        status: "confirmed",
-        createdAt: "2026-06-19T06:44:31.052Z",
-        updatedAt: "2026-06-19T06:44:31.052Z",
-        bookingId: "GR-F82DDD63",
-    },
-];
-
 export const dummyAdminStats = {
     users: { totalUsers: 1, totalOwners: 1, total: 2 },
     restaurants: { total: 6 },
@@ -403,4 +305,3 @@ export const dummyAdminStats = {
     ],
 };
 
-export const dummyFeaturedRestaurants = [dummyRestaurant[0], dummyRestaurant[1], dummyRestaurant[2]];
