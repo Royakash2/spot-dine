@@ -1,5 +1,4 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { useAppContext } from "../context/AppContext.tsx";
 import Navbar from "../components/Navbar.tsx";
@@ -8,63 +7,120 @@ import RestaurantCard from "../components/RestaurantCard.tsx";
 import AuthModal from "../components/AuthModal.tsx";
 import { CalendarIcon, UsersIcon, ClockIcon, MapPinIcon, CalendarDaysIcon } from "lucide-react";
 import toast from "react-hot-toast";
-import { dummyFeaturedRestaurants, dummyMyBookingsData } from "../assets/assets.ts";
+import { bookingApi, restaurantApi } from "../lib/api.ts";
+import { formatCalendarDate, formatTimeSlot, todayInputValue } from "../lib/date.ts";
+import type { Booking, BookingStatus, Restaurant } from "../types.ts";
+
+type BookingsState =
+    | { status: "loading" }
+    | { status: "error"; message: string }
+    | { status: "ready"; bookings: Booking[] };
+
+const statusStyles: Record<BookingStatus, string> = {
+    pending: "bg-amber-100 text-amber-800",
+    confirmed: "bg-secondary-container/30 text-on-secondary-container",
+    completed: "bg-green-100 text-green-800",
+    cancelled: "bg-error-container text-on-error-container",
+};
 
 export default function Dashboard() {
     const { user } = useAppContext();
 
-    const [bookings, setBookings] = useState<any[]>([]);
-    const [recommendations, setRecommendations] = useState<any[]>([]);
-    const [loadingBookings, setLoadingBookings] = useState(true);
+    const [state, setState] = useState<BookingsState>({ status: "loading" });
+    const [reloadKey, setReloadKey] = useState(0);
+    const [cancellingId, setCancellingId] = useState<string | null>(null);
+    const [recommendations, setRecommendations] = useState<Restaurant[] | null>(null);
 
-    // Fetch user bookings
     useEffect(() => {
-        const fetchBookings = async () => {
-            setBookings(dummyMyBookingsData);
-            setLoadingBookings(false);
+        let active = true;
+
+        bookingApi
+            .mine()
+            .then((bookings) => {
+                if (active) setState({ status: "ready", bookings });
+            })
+            .catch((err: unknown) => {
+                if (!active) return;
+                setState({
+                    status: "error",
+                    message: err instanceof Error ? err.message : "Could not load your bookings.",
+                });
+            });
+
+        return () => {
+            active = false;
         };
+    }, [reloadKey]);
 
-        if (user) {
-            fetchBookings();
-        }
-    }, [user]);
-
-    // Fetch generic recommendations
     useEffect(() => {
-        const fetchRecommendations = async () => {
-            setRecommendations(dummyFeaturedRestaurants);
+        let active = true;
+
+        restaurantApi
+            .list({ sort: "rating", limit: 3 })
+            .then((data) => {
+                if (active) setRecommendations(data.restaurants);
+            })
+            .catch(() => {
+                // Recommendations are a nice-to-have; the page still works without them.
+                if (active) setRecommendations([]);
+            });
+
+        return () => {
+            active = false;
         };
-        fetchRecommendations();
     }, []);
 
-    const handleCancelBooking = async (bookingId: string) => {
+    const bookings = state.status === "ready" ? state.bookings : [];
+    const loadingBookings = state.status === "loading";
+    const errorBookings = state.status === "error" ? state.message : null;
+
+    const handleRetry = () => {
+        setState({ status: "loading" });
+        setReloadKey((key) => key + 1);
+    };
+
+    const handleCancelBooking = async (booking: Booking) => {
         if (!window.confirm("Are you sure you want to cancel this booking?")) {
             return;
         }
 
+        setCancellingId(booking._id);
+
         try {
-            setBookings((prev) => prev.map((b) => (b._id === bookingId ? { ...b, status: "cancelled" } : b)));
+            await bookingApi.cancel(booking._id);
+            setState((previous) =>
+                previous.status === "ready"
+                    ? {
+                          ...previous,
+                          bookings: previous.bookings.map((item) =>
+                              item._id === booking._id
+                                  ? { ...item, status: "cancelled" as const }
+                                  : item,
+                          ),
+                      }
+                    : previous,
+            );
             toast.success("Reservation cancelled successfully.");
-        } catch (error: any) {
-            toast.error(error?.response?.data?.message || error?.message);
+        } catch (err: unknown) {
+            toast.error(err instanceof Error ? err.message : "Could not cancel the booking.");
+        } finally {
+            setCancellingId(null);
         }
     };
 
     if (!user) return null;
 
-    // Filter bookings into upcoming and past
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    // Booking dates are calendar days stored at UTC midnight, so today is
+    // measured from UTC midnight as well.
+    const todayStart = new Date(`${todayInputValue()}T00:00:00.000Z`).getTime();
 
-    const upcomingBookings = bookings.filter((b) => {
-        const bDate = new Date(b.date);
-        return bDate >= today && b.status === "confirmed";
-    });
+    const upcomingBookings = bookings.filter(
+        (booking) =>
+            new Date(booking.date).getTime() >= todayStart &&
+            (booking.status === "pending" || booking.status === "confirmed"),
+    );
 
-    const pastBookings = bookings.filter((b) => {
-        const bDate = new Date(b.date);
-        return bDate < today || b.status !== "confirmed";
-    });
+    const pastBookings = bookings.filter((booking) => !upcomingBookings.includes(booking));
 
     return (
         <div className="min-h-screen bg-surface flex flex-col">
@@ -91,6 +147,16 @@ export default function Dashboard() {
                                 <div className="bg-white border border-outline-variant/10 p-12 text-center flex justify-center">
                                     <div className="w-6 h-6 border-2 border-outline-variant/30 border-t-secondary rounded-full animate-spin"></div>
                                 </div>
+                            ) : errorBookings ? (
+                                <div className="bg-white border border-outline-variant/10 p-12 text-center rounded-md space-y-3">
+                                    <p className="text-xs text-black/55 italic">{errorBookings}</p>
+                                    <button
+                                        onClick={handleRetry}
+                                        className="text-[10px] font-medium tracking-widest uppercase text-secondary hover:underline cursor-pointer"
+                                    >
+                                        Try Again
+                                    </button>
+                                </div>
                             ) : upcomingBookings.length === 0 ? (
                                 <div className="bg-white border border-outline-variant/10 p-12 text-center rounded-md">
                                     <CalendarDaysIcon size={36} className="mx-auto text-outline-variant mb-2" />
@@ -114,21 +180,34 @@ export default function Dashboard() {
                                             <div className="flex gap-4">
                                                 <div className="w-16 h-16 rounded-sm overflow-hidden shrink-0 bg-surface">
                                                     <img
-                                                        src={b.restaurant?.image}
-                                                        alt={b.restaurant?.name}
+                                                        src={typeof b.restaurant === "string" ? "" : b.restaurant.image}
+                                                        alt={typeof b.restaurant === "string" ? "" : b.restaurant.name}
                                                         className="w-full h-full object-cover"
                                                     />
                                                 </div>
                                                 <div className="space-y-1">
-                                                    <span className="text-[9px] font-medium text-secondary tracking-widest uppercase">
-                                                        {b.restaurant?.cuisine}
-                                                    </span>
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="text-[9px] font-medium text-secondary tracking-widest uppercase">
+                                                            {typeof b.restaurant === "string"
+                                                                ? ""
+                                                                : b.restaurant.cuisine}
+                                                        </span>
+                                                        <span
+                                                            className={`inline-block py-0.5 px-2 text-[9px] font-medium tracking-wider uppercase rounded-sm ${statusStyles[b.status]}`}
+                                                        >
+                                                            {b.status}
+                                                        </span>
+                                                    </div>
                                                     <h4 className="font-display text-base font-medium text-primary">
-                                                        {b.restaurant?.name}
+                                                        {typeof b.restaurant === "string"
+                                                            ? "Restaurant"
+                                                            : b.restaurant.name}
                                                     </h4>
                                                     <p className="text-xs text-black/55 flex items-center gap-1">
                                                         <MapPinIcon size={12} />
-                                                        {b.restaurant?.location}
+                                                        {typeof b.restaurant === "string"
+                                                            ? ""
+                                                            : b.restaurant.location}
                                                     </p>
                                                 </div>
                                             </div>
@@ -136,11 +215,17 @@ export default function Dashboard() {
                                             <div className="flex flex-wrap items-center gap-6 text-xs text-on-surface bg-surface-container-low p-4 rounded-md border border-outline-variant/10 w-full md:w-auto">
                                                 <div className="flex items-center gap-2 pr-4 md:border-r border-outline-variant/20">
                                                     <CalendarIcon size={14} className="text-secondary" />
-                                                    <span className="font-medium">{new Date(b.date).toLocaleDateString()}</span>
+                                                    <span className="font-medium">
+                                                        {formatCalendarDate(b.date, {
+                                                            month: "short",
+                                                            day: "numeric",
+                                                            year: "numeric",
+                                                        })}
+                                                    </span>
                                                 </div>
                                                 <div className="flex items-center gap-2 pr-4 md:border-r border-outline-variant/20">
                                                     <ClockIcon size={14} className="text-secondary" />
-                                                    <span className="font-medium">{b.time} PM</span>
+                                                    <span className="font-medium">{formatTimeSlot(b.timeSlot)}</span>
                                                 </div>
                                                 <div className="flex items-center gap-2">
                                                     <UsersIcon size={14} className="text-secondary" />
@@ -150,10 +235,11 @@ export default function Dashboard() {
 
                                             <div className="flex gap-3 w-full md:w-auto justify-end">
                                                 <button
-                                                    onClick={() => handleCancelBooking(b._id)}
-                                                    className="px-5 py-2.5 text-[10px] font-medium tracking-widest uppercase text-error hover:bg-error-container/20 border border-outline-variant/40 rounded-sm cursor-pointer transition-colors"
+                                                    onClick={() => handleCancelBooking(b)}
+                                                    disabled={cancellingId === b._id}
+                                                    className="px-5 py-2.5 text-[10px] font-medium tracking-widest uppercase text-error hover:bg-error-container/20 border border-outline-variant/40 rounded-sm cursor-pointer transition-colors disabled:opacity-50 disabled:cursor-wait"
                                                 >
-                                                    Cancel
+                                                    {cancellingId === b._id ? "Cancelling..." : "Cancel"}
                                                 </button>
                                             </div>
                                         </div>
@@ -184,27 +270,32 @@ export default function Dashboard() {
                                                           <tr key={b._id} className="hover:bg-surface/50">
                                                               <td className="p-4 font-medium text-primary">
                                                                   <Link
-                                                                      to={`/restaurant/${b.restaurant?.slug}`}
+                                                                      to={`/restaurant/${
+                                                                          typeof b.restaurant === "string"
+                                                                              ? ""
+                                                                              : b.restaurant.slug
+                                                                      }`}
                                                                       className="hover:text-secondary"
                                                                   >
-                                                                      {b.restaurant?.name}
+                                                                      {typeof b.restaurant === "string"
+                                                                          ? "Restaurant"
+                                                                          : b.restaurant.name}
                                                                   </Link>
                                                               </td>
                                                               <td className="p-4">
-                                                                  {new Date(b.date).toLocaleDateString()} at {b.time} PM
+                                                                  {formatCalendarDate(b.date, {
+                                                                      month: "short",
+                                                                      day: "numeric",
+                                                                      year: "numeric",
+                                                                  })}{" "}
+                                                                  at {formatTimeSlot(b.timeSlot)}
                                                               </td>
                                                               <td className="p-4">
                                                                   {b.guests} {b.guests === 1 ? "Guest" : "Guests"}
                                                               </td>
                                                               <td className="p-4">
                                                                   <span
-                                                                      className={`inline-block py-0.5 px-2 text-[9px] font-medium tracking-wider uppercase rounded-sm ${
-                                                                          b.status === "confirmed"
-                                                                              ? "bg-secondary-container/30 text-on-secondary-container"
-                                                                              : b.status === "completed"
-                                                                                ? "bg-green-100 text-green-800"
-                                                                                : "bg-error-container text-on-error-container"
-                                                                      }`}
+                                                                      className={`inline-block py-0.5 px-2 text-[9px] font-medium tracking-wider uppercase rounded-sm ${statusStyles[b.status]}`}
                                                                   >
                                                                       {b.status}
                                                                   </span>
@@ -220,12 +311,12 @@ export default function Dashboard() {
                     </div>
 
                     {/* Recommendations Section */}
-                    {recommendations.length > 0 && (
+                    {recommendations && recommendations.length > 0 && (
                         <div className="space-y-4 pt-10 border-t border-outline-variant/10">
                             <h3 className="font-display text-lg font-medium text-primary">Recommended for You</h3>
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                                {recommendations.slice(0, 3).map((r) => (
-                                    <RestaurantCard key={r._id} restaurant={r} />
+                                {recommendations.map((restaurant) => (
+                                    <RestaurantCard key={restaurant._id} restaurant={restaurant} />
                                 ))}
                             </div>
                         </div>
