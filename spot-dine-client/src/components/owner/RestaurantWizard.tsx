@@ -1,11 +1,11 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import React, { useState } from "react";
 import { Utensils, Upload, Image } from "lucide-react";
 import toast from "react-hot-toast";
-import { dummyRestaurant } from "../../assets/assets.ts";
+import { restaurantApi } from "../../lib/api.ts";
+import type { Restaurant } from "../../types.ts";
 
 interface RestaurantWizardProps {
-    setRestaurant: (restaurant: any) => void;
+    setRestaurant: (restaurant: Restaurant) => void;
 }
 
 export default function RestaurantWizard({ setRestaurant }: RestaurantWizardProps) {
@@ -85,10 +85,11 @@ export default function RestaurantWizard({ setRestaurant }: RestaurantWizardProp
                 formData.append("image", imageFile);
             }
 
-            setRestaurant(dummyRestaurant[0]);
+            const created = await restaurantApi.create(formData);
+            setRestaurant(created);
             toast.success("Restaurant profile submitted successfully! Awaiting Admin approval.");
-        } catch (error: any) {
-            toast.error(error?.response?.data?.message || "Failed to register restaurant");
+        } catch (error: unknown) {
+            toast.error(error instanceof Error ? error.message : "Failed to register restaurant");
         } finally {
             setFormLoading(false);
         }

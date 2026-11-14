@@ -1,12 +1,12 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import React, { useState, useEffect } from "react";
 import toast from "react-hot-toast";
 import { Upload, Image } from "lucide-react";
-import { dummyRestaurant } from "../../assets/assets.ts";
+import { restaurantApi } from "../../lib/api.ts";
+import type { Restaurant } from "../../types.ts";
 
 interface OwnerProfileDetailsProps {
-    restaurant: any;
-    setRestaurant: (restaurant: any) => void;
+    restaurant: Restaurant;
+    setRestaurant: (restaurant: Restaurant) => void;
 }
 
 export default function OwnerProfileDetails({ restaurant, setRestaurant }: OwnerProfileDetailsProps) {
@@ -93,10 +93,11 @@ export default function OwnerProfileDetails({ restaurant, setRestaurant }: Owner
             if (imageFile) {
                 formData.append("image", imageFile);
             }
-            setRestaurant(dummyRestaurant[0]);
+            const updated = await restaurantApi.update(restaurant._id, formData);
+            setRestaurant(updated);
             toast.success("Profile details updated successfully!");
-        } catch (error: any) {
-            toast.error(error?.response?.data?.message || "Update failed");
+        } catch (error: unknown) {
+            toast.error(error instanceof Error ? error.message : "Update failed");
         } finally {
             setFormLoading(false);
         }

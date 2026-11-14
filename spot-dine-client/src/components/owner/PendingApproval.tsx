@@ -1,8 +1,8 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { Info } from "lucide-react";
+import type { Restaurant } from "../../types.ts";
 
 interface PendingApprovalProps {
-    restaurant: any;
+    restaurant: Restaurant;
 }
 
 export default function PendingApproval({ restaurant }: PendingApprovalProps) {
@@ -11,18 +11,18 @@ export default function PendingApproval({ restaurant }: PendingApprovalProps) {
             <Info size={40} className="mx-auto text-secondary animate-pulse" />
             <h2 className="font-display text-xl text-primary">Registration Pending Approval</h2>
             <p className="text-sm text-black/55 leading-relaxed">
-                Thank you for registering <span className="text-black">{restaurant?.name}</span>. Your profile details and slots listing are
+                Thank you for registering <span className="text-black">{restaurant.name}</span>. Your profile details and slots listing are
                 currently under review by our Master Admin.
             </p>
             <div className="border border-outline-variant/10 bg-surface-container-low/20 p-4 rounded-sm text-left space-y-1 text-xs text-black/65">
                 <p>
-                    <strong>Cuisine:</strong> {restaurant?.cuisine}
+                    <strong>Cuisine:</strong> {restaurant.cuisine}
                 </p>
                 <p>
-                    <strong>Location:</strong> {restaurant?.location}
+                    <strong>Location:</strong> {restaurant.location}
                 </p>
                 <p>
-                    <strong>Capacity:</strong> {restaurant?.totalSeats} seats
+                    <strong>Capacity:</strong> {restaurant.totalSeats} seats
                 </p>
                 <p>
                     <strong>Status:</strong>{" "}
