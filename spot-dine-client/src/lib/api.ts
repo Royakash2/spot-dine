@@ -129,6 +129,12 @@ export interface AvailabilityResponse {
     slots: SlotAvailability[];
 }
 
+export interface RestaurantResponse {
+    success: true;
+    message: string;
+    restaurant: Restaurant;
+}
+
 export interface ReviewListResponse extends PaginationMeta {
     success: true;
     count: number;
@@ -158,6 +164,21 @@ export const restaurantApi = {
             "/restaurants/my",
         );
         return data.restaurants;
+    },
+
+    // Multipart because the cover image is uploaded straight to Cloudinary.
+    // The server starts every new listing as "pending".
+    async create(formData: FormData): Promise<Restaurant> {
+        const { data } = await api.post<RestaurantResponse>("/restaurants", formData);
+        return data.restaurant;
+    },
+
+    async update(id: string, formData: FormData): Promise<Restaurant> {
+        const { data } = await api.put<RestaurantResponse>(
+            `/restaurants/${encodeURIComponent(id)}`,
+            formData,
+        );
+        return data.restaurant;
     },
 
     // Public detail pages only resolve approved restaurants; anything else is a 404.
