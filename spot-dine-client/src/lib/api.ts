@@ -203,6 +203,21 @@ export const restaurantApi = {
     },
 };
 
+export interface CreateReviewPayload {
+    bookingId?: string;
+    restaurantId?: string;
+    rating: number;
+    comment?: string;
+}
+
+export interface ReviewResponse {
+    success: true;
+    message: string;
+    rating: number;
+    reviewCount: number;
+    review: Review;
+}
+
 export const reviewApi = {
     async list(
         restaurant: string,
@@ -211,6 +226,18 @@ export const reviewApi = {
         const { data } = await api.get<ReviewListResponse>("/reviews", {
             params: { restaurant, ...query },
         });
+        return data;
+    },
+
+    async create(payload: CreateReviewPayload): Promise<ReviewResponse> {
+        const { data } = await api.post<ReviewResponse>("/reviews", payload);
+        return data;
+    },
+
+    async delete(id: string): Promise<{ success: true; message: string; rating: number; reviewCount: number }> {
+        const { data } = await api.delete<{ success: true; message: string; rating: number; reviewCount: number }>(
+            `/reviews/${encodeURIComponent(id)}`,
+        );
         return data;
     },
 };

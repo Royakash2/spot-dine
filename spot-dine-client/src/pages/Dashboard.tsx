@@ -5,7 +5,8 @@ import Navbar from "../components/Navbar.tsx";
 import Footer from "../components/Footer.tsx";
 import RestaurantCard from "../components/RestaurantCard.tsx";
 import AuthModal from "../components/AuthModal.tsx";
-import { CalendarIcon, UsersIcon, ClockIcon, MapPinIcon, CalendarDaysIcon } from "lucide-react";
+import ReviewModal from "../components/restaurant/ReviewModal.tsx";
+import { CalendarIcon, UsersIcon, ClockIcon, MapPinIcon, CalendarDaysIcon, Star } from "lucide-react";
 import toast from "react-hot-toast";
 import { bookingApi, restaurantApi } from "../lib/api.ts";
 import { formatCalendarDate, formatTimeSlot, todayInputValue } from "../lib/date.ts";
@@ -30,6 +31,8 @@ export default function Dashboard() {
     const [reloadKey, setReloadKey] = useState(0);
     const [cancellingId, setCancellingId] = useState<string | null>(null);
     const [recommendations, setRecommendations] = useState<Restaurant[] | null>(null);
+    const [reviewingBooking, setReviewingBooking] = useState<Booking | null>(null);
+    const [reviewedBookingIds, setReviewedBookingIds] = useState<Set<string>>(new Set());
 
     useEffect(() => {
         let active = true;
@@ -263,6 +266,7 @@ export default function Dashboard() {
                                                           <th className="p-4">Date & Time</th>
                                                           <th className="p-4">Party</th>
                                                           <th className="p-4">Status</th>
+                                                          <th className="p-4 text-right">Actions</th>
                                                       </tr>
                                                   </thead>
                                                   <tbody className="divide-y divide-outline-variant/10">
@@ -300,6 +304,22 @@ export default function Dashboard() {
                                                                       {b.status}
                                                                   </span>
                                                               </td>
+                                                              <td className="p-4 text-right">
+                                                                  {b.status === "completed" && (
+                                                                      reviewedBookingIds.has(b._id) ? (
+                                                                          <span className="inline-flex items-center gap-1 text-[10px] text-green-700 font-medium">
+                                                                              <Star size={11} fill="currentColor" /> Reviewed
+                                                                          </span>
+                                                                      ) : (
+                                                                          <button
+                                                                              onClick={() => setReviewingBooking(b)}
+                                                                              className="inline-flex items-center gap-1 px-3 py-1 bg-secondary/10 hover:bg-secondary text-secondary hover:text-white border border-secondary/30 text-[10px] font-medium tracking-wider uppercase rounded-sm transition-colors cursor-pointer"
+                                                                          >
+                                                                              <Star size={10} /> Leave Review
+                                                                          </button>
+                                                                      )
+                                                                  )}
+                                                              </td>
                                                           </tr>
                                                       ))}
                                                   </tbody>
@@ -325,6 +345,15 @@ export default function Dashboard() {
             </main>
 
             <Footer />
+            {reviewingBooking && (
+                <ReviewModal
+                    booking={reviewingBooking}
+                    onClose={() => setReviewingBooking(null)}
+                    onSuccess={(bookingId) => {
+                        setReviewedBookingIds((prev) => new Set(prev).add(bookingId));
+                    }}
+                />
+            )}
         </div>
     );
 }
