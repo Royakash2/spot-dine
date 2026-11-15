@@ -110,3 +110,28 @@ export interface ApiMessage {
     success: true;
     message: string;
 }
+
+export interface AdminStatsData {
+    users: {
+        total: number;
+        totalUsers: number;
+        totalOwners: number;
+        totalAdmins: number;
+    };
+    restaurants: {
+        total: number;
+        pending: number;
+        approved: number;
+        rejected: number;
+    };
+    bookings: {
+        total: number;
+        pending: number;
+        confirmed: number;
+        completed: number;
+        cancelled: number;
+        active: number;
+    };
+    latestBookings: Booking[];
+}
+

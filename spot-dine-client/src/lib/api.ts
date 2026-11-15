@@ -1,10 +1,12 @@
 import axios, { AxiosError } from "axios";
 import type {
+    AdminStatsData,
     AuthResponse,
     Booking,
     BookingStatus,
     PaginationMeta,
     Restaurant,
+    RestaurantStatus,
     Review,
     Role,
     SlotAvailability,
@@ -310,3 +312,45 @@ export const authApi = {
         return data.user;
     },
 };
+
+export interface AdminRestaurantListResponse extends PaginationMeta {
+    success: true;
+    count: number;
+    restaurants: Restaurant[];
+}
+
+export const adminApi = {
+    async stats(): Promise<AdminStatsData> {
+        const { data } = await api.get<{ success: true; stats: AdminStatsData }>("/admin/stats");
+        return data.stats;
+    },
+
+    async restaurants(query: { status?: RestaurantStatus; page?: number; limit?: number } = {}): Promise<AdminRestaurantListResponse> {
+        const params = new URLSearchParams();
+        if (query.status) params.set("status", query.status);
+        if (query.page && query.page > 1) params.set("page", String(query.page));
+        if (query.limit) params.set("limit", String(query.limit));
+
+        const { data } = await api.get<AdminRestaurantListResponse>("/admin/restaurants", { params });
+        return data;
+    },
+
+    async updateRestaurantStatus(id: string, status: "approved" | "rejected"): Promise<Restaurant> {
+        const { data } = await api.patch<{ success: true; message: string; restaurant: Restaurant }>(
+            `/admin/restaurants/${encodeURIComponent(id)}/status`,
+            { status },
+        );
+        return data.restaurant;
+    },
+
+    async bookings(query: { status?: BookingStatus; page?: number; limit?: number } = {}): Promise<BookingListResponse> {
+        const params = new URLSearchParams();
+        if (query.status) params.set("status", query.status);
+        if (query.page && query.page > 1) params.set("page", String(query.page));
+        if (query.limit) params.set("limit", String(query.limit));
+
+        const { data } = await api.get<BookingListResponse>("/admin/bookings", { params });
+        return data;
+    },
+};
+
