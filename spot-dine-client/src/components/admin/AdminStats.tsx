@@ -1,8 +1,9 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { Users, ShieldCheck, Utensils, Calendar } from "lucide-react";
+import type { AdminStatsData } from "../../types.ts";
+import { formatCalendarDate, formatTimeSlot } from "../../lib/date.ts";
 
 interface AdminStatsProps {
-    stats: any;
+    stats: AdminStatsData;
 }
 
 export default function AdminStats({ stats }: AdminStatsProps) {
@@ -50,36 +51,47 @@ export default function AdminStats({ stats }: AdminStatsProps) {
                             </thead>
 
                             <tbody className="divide-y divide-outline-variant/10">
-                                {stats.latestBookings.map((b: any) => (
-                                    <tr key={b._id} className="hover:bg-surface/50">
-                                        <td className="p-4 text-primary">{b.bookingId}</td>
+                                {stats.latestBookings.map((b) => {
+                                    const userName = typeof b.user === "object" ? b.user?.name : b.guestName || "Guest";
+                                    const userEmail = typeof b.user === "object" ? b.user?.email : b.guestEmail;
+                                    const restaurantName = typeof b.restaurant === "object" ? b.restaurant?.name : "Restaurant";
 
-                                        <td className="p-4">
-                                            <div className="text-primary">{b.user?.name}</div>
-                                            <div className="text-[10px] text-black/50">{b.user?.email}</div>
-                                        </td>
+                                    return (
+                                        <tr key={b._id} className="hover:bg-surface/50">
+                                            <td className="p-4 text-primary font-medium">{b.bookingId}</td>
 
-                                        <td className="p-4 text-primary">{b.restaurant?.name || "Deleted Restaurant"}</td>
+                                            <td className="p-4">
+                                                <div className="text-primary">{userName}</div>
+                                                {userEmail && <div className="text-[10px] text-black/50">{userEmail}</div>}
+                                            </td>
 
-                                        <td className="p-4 text-black/55">
-                                            {new Date(b.date).toLocaleDateString()} at {b.time} PM • {b.guests} Guests
-                                        </td>
+                                            <td className="p-4 text-primary">{restaurantName || "Deleted Restaurant"}</td>
 
-                                        <td className="p-4 text-right">
-                                            <span
-                                                className={`inline-block py-0.5 px-2 text-[9px] tracking-wider uppercase rounded-sm ${
-                                                    b.status === "confirmed"
-                                                        ? "bg-blue-100 text-blue-800"
-                                                        : b.status === "completed"
-                                                          ? "bg-green-100 text-green-800"
-                                                          : "bg-error-container text-on-error-container"
-                                                }`}
-                                            >
-                                                {b.status}
-                                            </span>
-                                        </td>
-                                    </tr>
-                                ))}
+                                            <td className="p-4 text-black/55">
+                                                {formatCalendarDate(b.date, {
+                                                    month: "short",
+                                                    day: "numeric",
+                                                    year: "numeric",
+                                                })}{" "}
+                                                at {formatTimeSlot(b.timeSlot)} • {b.guests} {b.guests === 1 ? "Guest" : "Guests"}
+                                            </td>
+
+                                            <td className="p-4 text-right">
+                                                <span
+                                                    className={`inline-block py-0.5 px-2 text-[9px] tracking-wider uppercase rounded-sm ${
+                                                        b.status === "confirmed"
+                                                            ? "bg-blue-100 text-blue-800"
+                                                            : b.status === "completed"
+                                                              ? "bg-green-100 text-green-800"
+                                                              : "bg-error-container text-on-error-container"
+                                                    }`}
+                                                >
+                                                    {b.status}
+                                                </span>
+                                            </td>
+                                        </tr>
+                                    );
+                                })}
                             </tbody>
                         </table>
                     </div>

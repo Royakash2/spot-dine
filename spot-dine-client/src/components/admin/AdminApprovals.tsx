@@ -1,10 +1,10 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { Link } from "react-router-dom";
 import { CheckCircle, Utensils, MapPin, Users } from "lucide-react";
+import type { Restaurant } from "../../types.ts";
 
 interface AdminApprovalsProps {
-    pendingRestaurants: any[];
-    otherRestaurants: any[];
+    pendingRestaurants: Restaurant[];
+    otherRestaurants: Restaurant[];
     btnLoading: string | null;
     onApproveStatus: (restaurantId: string, status: "approved" | "rejected") => Promise<void>;
 }
@@ -45,7 +45,7 @@ export default function AdminApprovals({ pendingRestaurants, otherRestaurants, b
                                         </span>
                                     </div>
                                     <p className="text-[10px] text-secondary font-medium tracking-wide uppercase pt-1">
-                                        Owner: {r.owner?.name} ({r.owner?.email})
+                                        Owner: {typeof r.owner === "object" && r.owner?.name ? `${r.owner.name}${r.owner.email ? ` (${r.owner.email})` : ""}` : "N/A"}
                                     </p>
                                 </div>
 
@@ -99,7 +99,7 @@ export default function AdminApprovals({ pendingRestaurants, otherRestaurants, b
                                         <td className="p-4">
                                             {r.cuisine} • {r.location}
                                         </td>
-                                        <td className="p-4 text-black/55">{r.owner?.name || "N/A"}</td>
+                                        <td className="p-4 text-black/55">{typeof r.owner === "object" ? r.owner?.name || "N/A" : "N/A"}</td>
                                         <td className="p-4 text-right space-x-3">
                                             <span
                                                 className={`inline-block py-0.5 px-2 text-[9px] font-medium tracking-wider uppercase rounded-sm ${
