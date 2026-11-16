@@ -1,5 +1,5 @@
 import type { Response } from "express";
-import { Types } from "mongoose";
+import mongoose, { Types, type ClientSession } from "mongoose";
 import type { AuthRequest } from "../middlewares/auth.js";
 import { Booking, generateBookingId } from "../models/Booking.js";
 import { Restaurant } from "../models/Restaurant.js";
@@ -112,49 +112,8 @@ export const createBooking = async (
     throw badRequest(`Time slot "${timeSlot}" is not offered by this restaurant`);
   }
 
-  // --- 4. Reject a duplicate active booking (double-click / refresh) ---
-  const duplicate = await Booking.exists({
-    user: user._id,
-    restaurant: restaurant._id,
-    date: { $gte: dayStart, $lte: dayEnd },
-    timeSlot,
-    status: { $in: ["pending", "confirmed"] },
-  });
-
-  if (duplicate) {
-    throw conflict("You already have a booking at this restaurant for this time");
-  }
-
-  // --- 5. Count already-booked seats for this slot on this date ---
-  const bookedSeatsResult = await Booking.aggregate<{ totalBooked: number }>([
-    {
-      $match: {
-        restaurant: restaurant._id,
-        timeSlot,
-        date: { $gte: dayStart, $lte: dayEnd },
-        status: { $in: ["pending", "confirmed"] },
-      },
-    },
-    {
-      $group: {
-        _id: null,
-        totalBooked: { $sum: "$guests" },
-      },
-    },
-  ]);
-
-  const alreadyBooked = bookedSeatsResult[0]?.totalBooked ?? 0;
-  const availableSeats = Math.max(0, restaurant.totalSeats - alreadyBooked);
-
-  if (guests > availableSeats) {
-    throw conflict(
-      `Not enough seats. Only ${availableSeats} seat(s) available for this slot.`,
-      { availableSeats },
-    );
-  }
-
-  // --- 6. Create the booking ---
-  const booking = await Booking.create({
+  // --- 4. Atomic capacity check and booking creation with transaction ---
+  const bookingPayload = {
     bookingId: generateBookingId(),
     restaurant: restaurant._id,
     user: user._id,
@@ -162,16 +121,89 @@ export const createBooking = async (
     timeSlot,
     guests,
     occasion: cleanString(body.occasion),
-    // Snapshot of the guest details, so the record survives account deletion
     guestName: cleanString(body.name) || user.name,
     guestEmail: cleanString(body.email).toLowerCase() || user.email,
     guestPhone: cleanString(body.phone) || user.phone || "",
     specialRequests: cleanString(body.specialRequests),
-    status: "pending",
-  });
+    status: "pending" as const,
+  };
 
-  await booking.populate("restaurant", "name slug location");
-  await booking.populate("user", "name email");
+  const executeBooking = async (session?: ClientSession) => {
+    const duplicate = await Booking.exists({
+      user: user._id,
+      restaurant: restaurant._id,
+      date: { $gte: dayStart, $lte: dayEnd },
+      timeSlot,
+      status: { $in: ["pending", "confirmed"] },
+    }).session(session ?? null);
+
+    if (duplicate) {
+      throw conflict("You already have a booking at this restaurant for this time");
+    }
+
+    const bookedSeatsResult = await Booking.aggregate<{ totalBooked: number }>([
+      {
+        $match: {
+          restaurant: restaurant._id,
+          timeSlot,
+          date: { $gte: dayStart, $lte: dayEnd },
+          status: { $in: ["pending", "confirmed"] },
+        },
+      },
+      {
+        $group: {
+          _id: null,
+          totalBooked: { $sum: "$guests" },
+        },
+      },
+    ]).session(session ?? null);
+
+    const alreadyBooked = bookedSeatsResult[0]?.totalBooked ?? 0;
+    const availableSeats = Math.max(0, restaurant.totalSeats - alreadyBooked);
+
+    if (guests > availableSeats) {
+      throw conflict(
+        `Not enough seats. Only ${availableSeats} seat(s) available for this slot.`,
+        { availableSeats },
+      );
+    }
+
+    if (session) {
+      const [created] = await Booking.create([bookingPayload], { session });
+      return created;
+    }
+
+    return await Booking.create(bookingPayload);
+  };
+
+  let booking;
+  const session = await mongoose.startSession();
+
+  try {
+    await session.withTransaction(async () => {
+      booking = await executeBooking(session);
+    });
+  } catch (error: any) {
+    // Standalone MongoDB instances (e.g. without replica set) do not support transactions.
+    // Fall back to direct atomic execution if transactions are unsupported.
+    if (
+      error?.message?.includes("Transaction numbers are only allowed on a replica set member or mongos") ||
+      error?.code === 20
+    ) {
+      booking = await executeBooking();
+    } else {
+      throw error;
+    }
+  } finally {
+    await session.endSession();
+  }
+
+  if (!booking) {
+    throw conflict("Unable to complete reservation. Please try again.");
+  }
+
+  await (booking as any).populate("restaurant", "name slug location");
+  await (booking as any).populate("user", "name email");
 
   res.status(201).json({
     success: true,
