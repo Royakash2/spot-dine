@@ -76,7 +76,13 @@ const port = Number(process.env.PORT ?? 5000);
 
 const start = async (): Promise<void> => {
   requireEnv("MONGODB_URI");
-  requireEnv("JWT_SECRET");
+  const jwtSecret = requireEnv("JWT_SECRET");
+
+  if (process.env.NODE_ENV === "production" && jwtSecret.length < 32) {
+    throw new Error(
+      "JWT_SECRET must be at least 32 characters in production for cryptographic security",
+    );
+  }
 
   await connectDB();
 

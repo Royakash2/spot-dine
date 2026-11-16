@@ -55,36 +55,53 @@ const credentialsFromEnv = (): CloudinaryCredentials | null => {
     : null;
 };
 
-// Cloudinary is the only upload target, so credentials are required.
-// They must be validated before the SDK is imported: it parses
-// CLOUDINARY_URL while loading and throws on malformed values.
-const rawCloudinaryUrl = process.env.CLOUDINARY_URL;
-const urlCredentials = parseCloudinaryUrl(rawCloudinaryUrl);
+// Cloudinary credentials resolution
+let cloudinaryInstance: any = null;
+let isCloudinaryConfigured = false;
 
-if (rawCloudinaryUrl && !urlCredentials) {
-  throw new Error(
-    "CLOUDINARY_URL is malformed — expected cloudinary://<api_key>:<api_secret>@<cloud_name>",
-  );
-}
+const initCloudinary = async (): Promise<boolean> => {
+  if (cloudinaryInstance) return isCloudinaryConfigured;
 
-const credentials = urlCredentials ?? credentialsFromEnv();
+  const rawCloudinaryUrl = process.env.CLOUDINARY_URL;
+  const urlCredentials = parseCloudinaryUrl(rawCloudinaryUrl);
 
-if (!credentials) {
-  throw new Error(
-    "Cloudinary is not configured — add CLOUDINARY_URL to server/.env before starting the server",
-  );
-}
+  if (rawCloudinaryUrl && !urlCredentials) {
+    console.error(
+      "[uploads] CLOUDINARY_URL is malformed — expected cloudinary://<api_key>:<api_secret>@<cloud_name>",
+    );
+    return false;
+  }
 
-const { v2: cloudinary } = await import("cloudinary");
+  const credentials = urlCredentials ?? credentialsFromEnv();
 
-cloudinary.config({
-  cloud_name: credentials.cloudName,
-  api_key: credentials.apiKey,
-  api_secret: credentials.apiSecret,
-  secure: true,
-});
+  if (!credentials) {
+    console.warn(
+      "[uploads] Cloudinary is not configured. Image uploads will be disabled until CLOUDINARY_URL is provided in .env",
+    );
+    return false;
+  }
 
-console.log(`[uploads] using Cloudinary (${CLOUDINARY_FOLDER})`);
+  try {
+    const { v2: cloudinary } = await import("cloudinary");
+    cloudinary.config({
+      cloud_name: credentials.cloudName,
+      api_key: credentials.apiKey,
+      api_secret: credentials.apiSecret,
+      secure: true,
+    });
+
+    cloudinaryInstance = cloudinary;
+    isCloudinaryConfigured = true;
+    console.log(`[uploads] using Cloudinary (${CLOUDINARY_FOLDER})`);
+    return true;
+  } catch (err: any) {
+    console.error("[uploads] Failed to initialize Cloudinary SDK:", err?.message ?? err);
+    return false;
+  }
+};
+
+// Initiate async check on load without blocking server start
+void initCloudinary();
 
 const singleImageUpload = multer({
   // Buffers are uploaded straight to Cloudinary, nothing is written to disk
@@ -127,8 +144,16 @@ export const uploadRestaurantImage = (
       return;
     }
 
+    const ready = await initCloudinary();
+    if (!ready || !cloudinaryInstance) {
+      res.status(503).json({
+        message: "Image upload service is not configured. Please set CLOUDINARY_URL on the server.",
+      });
+      return;
+    }
+
     try {
-      const result = await cloudinary.uploader.upload(
+      const result = await cloudinaryInstance.uploader.upload(
         `data:${req.file.mimetype};base64,${req.file.buffer.toString("base64")}`,
         { folder: CLOUDINARY_FOLDER, resource_type: "image" },
       );
@@ -170,8 +195,11 @@ export const removeUploadedImage = async (imageUrl?: string): Promise<void> => {
   const publicId = getCloudinaryPublicId(imageUrl);
   if (!publicId) return;
 
+  const ready = await initCloudinary();
+  if (!ready || !cloudinaryInstance) return;
+
   try {
-    await cloudinary.uploader.destroy(publicId);
+    await cloudinaryInstance.uploader.destroy(publicId);
   } catch (error: any) {
     console.error(
       "[uploads] Failed to delete Cloudinary asset:",
