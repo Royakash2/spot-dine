@@ -6,9 +6,10 @@ import type { Restaurant } from "../../types.ts";
 
 interface RestaurantWizardProps {
     setRestaurant: (restaurant: Restaurant) => void;
+    onCancel?: () => void;
 }
 
-export default function RestaurantWizard({ setRestaurant }: RestaurantWizardProps) {
+export default function RestaurantWizard({ setRestaurant, onCancel }: RestaurantWizardProps) {
     const [name, setName] = useState("");
     const [description, setDescription] = useState("");
     const [cuisine, setCuisine] = useState("");
@@ -97,7 +98,16 @@ export default function RestaurantWizard({ setRestaurant }: RestaurantWizardProp
 
     return (
         <div className="max-w-2xl mx-auto bg-white border border-outline-variant/20 p-8 md:p-10 shadow-sm rounded-md space-y-6">
-            <div className="text-center space-y-2 pb-6 border-b border-outline-variant/10">
+            <div className="text-center space-y-2 pb-6 border-b border-outline-variant/10 relative">
+                {onCancel && (
+                    <button
+                        type="button"
+                        onClick={onCancel}
+                        className="absolute left-0 top-0 text-[10px] font-medium tracking-widest uppercase text-black/55 hover:text-primary transition-colors cursor-pointer"
+                    >
+                        ← Back to My Venues
+                    </button>
+                )}
                 <Utensils size={36} className="mx-auto text-secondary" />
                 <h2 className="font-display text-xl font-medium text-primary">Setup Restaurant Profile</h2>
                 <p className="text-xs text-black/55">
