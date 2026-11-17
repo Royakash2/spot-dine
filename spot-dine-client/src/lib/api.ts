@@ -323,6 +323,16 @@ export const bookingApi = {
     },
 };
 
+export interface UpdateProfilePayload {
+    name?: string;
+    phone?: string;
+}
+
+export interface ChangePasswordPayload {
+    currentPassword: string;
+    newPassword: string;
+}
+
 export const authApi = {
     async login(email: string, password: string): Promise<AuthResponse> {
         const { data } = await api.post<AuthResponse>("/auth/login", { email, password });
@@ -337,6 +347,16 @@ export const authApi = {
     async me(): Promise<User> {
         const { data } = await api.get<{ success: true; user: User }>("/auth/me");
         return data.user;
+    },
+
+    async updateProfile(payload: UpdateProfilePayload): Promise<User> {
+        const { data } = await api.patch<{ success: true; message: string; user: User }>("/auth/me", payload);
+        return data.user;
+    },
+
+    async changePassword(payload: ChangePasswordPayload): Promise<{ success: true; message: string }> {
+        const { data } = await api.patch<{ success: true; message: string }>("/auth/me/password", payload);
+        return data;
     },
 };
 

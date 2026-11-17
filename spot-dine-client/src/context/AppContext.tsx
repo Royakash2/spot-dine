@@ -23,6 +23,7 @@ interface AppContextType {
         phone?: string,
         role?: Extract<Role, "user" | "owner">,
     ) => Promise<void>;
+    updateUser: (user: User) => void;
     logout: () => void;
 }
 
@@ -115,6 +116,7 @@ export const AppContextProvider = ({ children }: Props) => {
         setAuthModalOpen,
         login,
         register,
+        updateUser: setUser,
         logout,
     };
 
