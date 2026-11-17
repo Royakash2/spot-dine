@@ -6,7 +6,8 @@ import Footer from "../components/Footer.tsx";
 import RestaurantCard from "../components/RestaurantCard.tsx";
 import AuthModal from "../components/AuthModal.tsx";
 import ReviewModal from "../components/restaurant/ReviewModal.tsx";
-import { CalendarIcon, UsersIcon, ClockIcon, MapPinIcon, CalendarDaysIcon, Star } from "lucide-react";
+import ProfileSettingsModal from "../components/profile/ProfileSettingsModal.tsx";
+import { CalendarIcon, UsersIcon, ClockIcon, MapPinIcon, CalendarDaysIcon, Star, Settings } from "lucide-react";
 import toast from "react-hot-toast";
 import { bookingApi, restaurantApi } from "../lib/api.ts";
 import { formatCalendarDate, formatTimeSlot, todayInputValue } from "../lib/date.ts";
@@ -33,6 +34,7 @@ export default function Dashboard() {
     const [recommendations, setRecommendations] = useState<Restaurant[] | null>(null);
     const [reviewingBooking, setReviewingBooking] = useState<Booking | null>(null);
     const [reviewedBookingIds, setReviewedBookingIds] = useState<Set<string>>(new Set());
+    const [settingsOpen, setSettingsOpen] = useState(false);
 
     useEffect(() => {
         let active = true;
@@ -134,11 +136,20 @@ export default function Dashboard() {
                 {/* Main Content Area */}
                 <div className="grow space-y-10">
                     {/* Welcoming header */}
-                    <div className="pb-4 border-b border-outline-variant/10">
-                        <h2 className="font-display text-2xl md:text-3xl font-semibold text-primary">
-                            Welcome back, {user.name.split(" ")[0]}
-                        </h2>
-                        <p className="text-xs text-black/55 mt-1.5">Manage your upcoming dining experiences.</p>
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-outline-variant/10 gap-4">
+                        <div>
+                            <h2 className="font-display text-2xl md:text-3xl font-semibold text-primary">
+                                Welcome back, {user.name.split(" ")[0]}
+                            </h2>
+                            <p className="text-xs text-black/55 mt-1.5">Manage your upcoming dining experiences.</p>
+                        </div>
+                        <button
+                            onClick={() => setSettingsOpen(true)}
+                            className="flex items-center gap-2 self-start sm:self-auto border border-outline-variant/40 hover:border-primary px-3.5 py-2 text-xs font-medium text-primary bg-white rounded-xs transition-colors cursor-pointer"
+                        >
+                            <Settings size={14} className="text-secondary" />
+                            Account Settings
+                        </button>
                     </div>
 
                     <div className="space-y-10">
@@ -354,6 +365,11 @@ export default function Dashboard() {
                     }}
                 />
             )}
+
+            <ProfileSettingsModal
+                isOpen={settingsOpen}
+                onClose={() => setSettingsOpen(false)}
+            />
         </div>
     );
 }

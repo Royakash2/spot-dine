@@ -1,12 +1,14 @@
 import { useState, useEffect } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { useAppContext } from "../context/AppContext.tsx";
-import { Menu, X, LogOut, LayoutDashboard, ShieldCheck } from "lucide-react";
+import { Menu, X, LogOut, LayoutDashboard, ShieldCheck, Settings } from "lucide-react";
+import ProfileSettingsModal from "./profile/ProfileSettingsModal.tsx";
 
 export default function Navbar() {
     const { user, logout, setAuthModalOpen } = useAppContext();
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
     const [dropdownOpen, setDropdownOpen] = useState(false);
+    const [settingsOpen, setSettingsOpen] = useState(false);
 
     const navigate = useNavigate();
     const location = useLocation();
@@ -101,6 +103,17 @@ export default function Navbar() {
                                     >
                                         <LayoutDashboard size={14} />
                                         My Bookings
+                                    </button>
+
+                                    <button
+                                        onClick={() => {
+                                            setDropdownOpen(false);
+                                            setSettingsOpen(true);
+                                        }}
+                                        className="w-full flex items-center gap-3 px-4 py-2.5 text-xs text-black/55 hover:text-primary hover:bg-surface transition-colors cursor-pointer text-left"
+                                    >
+                                        <Settings size={14} />
+                                        Account Settings
                                     </button>
 
                                     {user.role === "admin" && (
@@ -201,6 +214,16 @@ export default function Navbar() {
                             <Link to="/dashboard" className="text-sm font-medium text-black/55 hover:text-primary">
                                 My Bookings
                             </Link>
+                            <button
+                                onClick={() => {
+                                    setMobileMenuOpen(false);
+                                    setSettingsOpen(true);
+                                }}
+                                className="text-sm font-medium text-black/55 hover:text-primary text-left cursor-pointer flex items-center gap-2"
+                            >
+                                <Settings size={14} />
+                                Account Settings
+                            </button>
                             {user.role === "admin" && (
                                 <Link to="/admin/dashboard" className="text-sm font-medium text-black/55 hover:text-primary">
                                     Admin Console
@@ -233,6 +256,11 @@ export default function Navbar() {
                     )}
                 </div>
             )}
+
+            <ProfileSettingsModal
+                isOpen={settingsOpen}
+                onClose={() => setSettingsOpen(false)}
+            />
         </nav>
     );
 }
