@@ -1,6 +1,6 @@
 import { Calendar, Users } from "lucide-react";
 import type { Restaurant, SlotAvailability } from "../../types.ts";
-import { todayInputValue } from "../../lib/date.ts";
+import { formatTimeSlot, todayInputValue } from "../../lib/date.ts";
 
 interface BookingWidgetProps {
     restaurant: Restaurant;
@@ -46,11 +46,11 @@ export default function BookingWidget({
                             onChange={(e) => setSelectedGuests(e.target.value)}
                             className="w-full bg-surface-container-low/30 pl-9 pr-3 py-2.5 text-xs border border-outline-variant/40 focus:border-secondary focus:outline-none rounded-md cursor-pointer"
                         >
-                            <option value="1">1 Guest</option>
-                            <option value="2">2 Guests</option>
-                            <option value="4">4 Guests</option>
-                            <option value="6">6 Guests</option>
-                            <option value="8">8 Guests</option>
+                            {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((n) => (
+                                <option key={n} value={String(n)}>
+                                    {n} {n === 1 ? "Guest" : "Guests"}
+                                </option>
+                            ))}
                         </select>
                     </div>
                 </div>
@@ -89,37 +89,56 @@ export default function BookingWidget({
                                               availableSeats: restaurant.totalSeats,
                                               isAvailable: true,
                                           }));
-                                return allSlots.filter((slotInfo) => {
+                                const visibleSlots = allSlots.filter((slotInfo) => {
                                     if (!isToday) return true;
                                     const [slotHour, slotMinute] = slotInfo.time.split(":").map(Number);
                                     const now = new Date();
-                                    const currentHour = now.getHours();
-                                    const currentMinute = now.getMinutes();
-                                    return slotHour > currentHour || (slotHour === currentHour && slotMinute > currentMinute);
+                                    return (
+                                        slotHour > now.getHours() ||
+                                        (slotHour === now.getHours() && slotMinute > now.getMinutes())
+                                    );
                                 });
-                            })().map((slotInfo) => {
-                                const slot = slotInfo.time;
-                                const isSelected = selectedSlot === slot;
-                                const isFull = !slotInfo.isAvailable || slotInfo.availableSeats < Number(selectedGuests);
-                                return (
-                                    <button
-                                        key={slot}
-                                        type="button"
-                                        disabled={isFull}
-                                        onClick={() => setSelectedSlot(slot)}
-                                        className={`py-2 px-1 text-center text-[10px] font-medium tracking-wider uppercase border transition-all rounded-sm ${
-                                            isSelected
-                                                ? "bg-secondary border-secondary text-white shadow-sm cursor-pointer"
-                                                : isFull
-                                                  ? "bg-black/5 border-outline-variant/10 text-black/25 cursor-not-allowed opacity-50"
-                                                  : "border-outline-variant/40 text-black/55 hover:border-primary hover:text-primary cursor-pointer"
-                                        }`}
-                                    >
-                                        {slot}
-                                        {isFull && <span className="block text-[8px] text-error uppercase mt-0.5">Full</span>}
-                                    </button>
-                                );
-                            })
+
+                                if (visibleSlots.length === 0) {
+                                    return (
+                                        <div className="col-span-3 py-4 text-center text-[11px] text-black/45 italic">
+                                            No time slots available for this date.
+                                        </div>
+                                    );
+                                }
+
+                                return visibleSlots.map((slotInfo) => {
+                                    const slot = slotInfo.time;
+                                    const isSelected = selectedSlot === slot;
+                                    const isFull = !slotInfo.isAvailable || slotInfo.availableSeats < Number(selectedGuests);
+                                    const isLow = !isFull && slotInfo.availableSeats <= 5 && slotsAvailability.length > 0;
+                                    return (
+                                        <button
+                                            key={slot}
+                                            type="button"
+                                            disabled={isFull}
+                                            onClick={() => setSelectedSlot(slot)}
+                                            className={`py-2 px-1 text-center text-[10px] font-medium tracking-wider uppercase border transition-all rounded-sm ${
+                                                isSelected
+                                                    ? "bg-secondary border-secondary text-white shadow-sm cursor-pointer"
+                                                    : isFull
+                                                      ? "bg-black/5 border-outline-variant/10 text-black/25 cursor-not-allowed opacity-50"
+                                                      : "border-outline-variant/40 text-black/55 hover:border-primary hover:text-primary cursor-pointer"
+                                            }`}
+                                        >
+                                            {formatTimeSlot(slot)}
+                                            {isFull && (
+                                                <span className="block text-[8px] text-error uppercase mt-0.5">Full</span>
+                                            )}
+                                            {isLow && (
+                                                <span className="block text-[8px] text-amber-600 mt-0.5">
+                                                    {slotInfo.availableSeats} left
+                                                </span>
+                                            )}
+                                        </button>
+                                    );
+                                });
+                            })()
                         )}
                     </div>
                 </div>
