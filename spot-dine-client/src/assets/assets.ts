@@ -1,7 +1,7 @@
-import hero_bg_img from "./hero_bg_img.png";
-import default_restaurant_img from "./default_restaurant_Img.jpeg";
-import membership_section_img from "./membership_section_img.png";
-import hero_bg_two from "./hero-bg-two.jpg";
+import hero_bg_img from "./hero_bg_img.jpg";
+import default_restaurant_img from "./default_restaurant_img.jpg";
+import membership_section_img from "./membership_section_img.jpg";
+import hero_bg_two from "./hero_bg_two.jpg";
 import {
     BeefIcon,
     Building2Icon,
