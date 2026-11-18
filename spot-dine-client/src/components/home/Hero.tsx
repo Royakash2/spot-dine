@@ -115,11 +115,11 @@ export default function Hero() {
                                 value={guests}
                                 onChange={(e) => setGuests(e.target.value)}
                             >
-                                <option value="1">1 Guest</option>
-                                <option value="2">2 Guests</option>
-                                <option value="4">4 Guests</option>
-                                <option value="6">6 Guests</option>
-                                <option value="8">8 Guests</option>
+                                {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((n) => (
+                                    <option key={n} value={String(n)}>
+                                        {n} {n === 1 ? "Guest" : "Guests"}
+                                    </option>
+                                ))}
                             </select>
                         </div>
 
