@@ -1,13 +1,17 @@
+import { lazy, Suspense } from "react";
 import { Routes, Route } from "react-router-dom";
-import Home from "./pages/Home.tsx";
-import Search from "./pages/Search.tsx";
-import RestaurantDetail from "./pages/RestaurantDetail.tsx";
-import BookingConfirmation from "./pages/BookingConfirmation.tsx";
-import Dashboard from "./pages/Dashboard.tsx";
-import OwnerDashboard from "./pages/owner/OwnerDashboard.tsx";
-import AdminDashboard from "./pages/admin/AdminDashboard.tsx";
 import ProtectedRoute from "./components/ProtectedRoute.tsx";
+import Loader from "./components/Loader.tsx";
 import { Toaster } from "react-hot-toast";
+
+const Home = lazy(() => import("./pages/Home.tsx"));
+const Search = lazy(() => import("./pages/Search.tsx"));
+const RestaurantDetail = lazy(() => import("./pages/RestaurantDetail.tsx"));
+const BookingConfirmation = lazy(() => import("./pages/BookingConfirmation.tsx"));
+const Dashboard = lazy(() => import("./pages/Dashboard.tsx"));
+const OwnerDashboard = lazy(() => import("./pages/owner/OwnerDashboard.tsx"));
+const AdminDashboard = lazy(() => import("./pages/admin/AdminDashboard.tsx"));
+const NotFound = lazy(() => import("./pages/NotFound.tsx"));
 
 export default function App() {
     return (
@@ -26,43 +30,46 @@ export default function App() {
                     },
                 }}
             />
-            <Routes>
-                <Route path="/" element={<Home />} />
-                <Route path="/search" element={<Search />} />
-                <Route path="/restaurant/:slug" element={<RestaurantDetail />} />
-                <Route 
-                    path="/booking/:slug" 
-                    element={
-                        <ProtectedRoute>
-                            <BookingConfirmation />
-                        </ProtectedRoute>
-                    } 
-                />
-                <Route 
-                    path="/dashboard" 
-                    element={
-                        <ProtectedRoute>
-                            <Dashboard />
-                        </ProtectedRoute>
-                    } 
-                />
-                <Route 
-                    path="/owner/dashboard" 
-                    element={
-                        <ProtectedRoute allowedRoles={["owner"]}>
-                            <OwnerDashboard />
-                        </ProtectedRoute>
-                    } 
-                />
-                <Route 
-                    path="/admin/dashboard" 
-                    element={
-                        <ProtectedRoute allowedRoles={["admin"]}>
-                            <AdminDashboard />
-                        </ProtectedRoute>
-                    } 
-                />
-            </Routes>
+            <Suspense fallback={<Loader />}>
+                <Routes>
+                    <Route path="/" element={<Home />} />
+                    <Route path="/search" element={<Search />} />
+                    <Route path="/restaurant/:slug" element={<RestaurantDetail />} />
+                    <Route 
+                        path="/booking/:slug" 
+                        element={
+                            <ProtectedRoute>
+                                <BookingConfirmation />
+                            </ProtectedRoute>
+                        } 
+                    />
+                    <Route 
+                        path="/dashboard" 
+                        element={
+                            <ProtectedRoute>
+                                <Dashboard />
+                            </ProtectedRoute>
+                        } 
+                    />
+                    <Route 
+                        path="/owner/dashboard" 
+                        element={
+                            <ProtectedRoute allowedRoles={["owner"]}>
+                                <OwnerDashboard />
+                            </ProtectedRoute>
+                        } 
+                    />
+                    <Route 
+                        path="/admin/dashboard" 
+                        element={
+                            <ProtectedRoute allowedRoles={["admin"]}>
+                                <AdminDashboard />
+                            </ProtectedRoute>
+                        } 
+                    />
+                    <Route path="*" element={<NotFound />} />
+                </Routes>
+            </Suspense>
         </>
     );
 }
