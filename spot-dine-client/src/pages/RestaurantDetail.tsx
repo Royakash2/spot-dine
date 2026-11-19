@@ -3,7 +3,6 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import toast from "react-hot-toast";
 import Navbar from "../components/Navbar.tsx";
 import Footer from "../components/Footer.tsx";
-import AuthModal from "../components/AuthModal.tsx";
 import Loader from "../components/Loader.tsx";
 import RestaurantHero from "../components/restaurant/RestaurantHero.tsx";
 import RestaurantInfo from "../components/restaurant/RestaurantInfo.tsx";
@@ -181,7 +180,6 @@ export default function RestaurantDetail() {
     return (
         <div className="min-h-screen bg-surface flex flex-col">
             <Navbar />
-            <AuthModal />
 
             <RestaurantHero restaurant={restaurant} />
 

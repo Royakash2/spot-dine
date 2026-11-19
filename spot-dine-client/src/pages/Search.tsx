@@ -3,7 +3,6 @@ import { useSearchParams } from "react-router-dom";
 import Navbar from "../components/Navbar.tsx";
 import Footer from "../components/Footer.tsx";
 import RestaurantCard from "../components/RestaurantCard.tsx";
-import AuthModal from "../components/AuthModal.tsx";
 import { SlidersHorizontal, Search as SearchIcon, X, Check, MapPin, SearchXIcon } from "lucide-react";
 import { restaurantApi, type RestaurantQuery } from "../lib/api.ts";
 import type { PaginationMeta, Restaurant } from "../types.ts";
@@ -161,7 +160,6 @@ export default function Search() {
     return (
         <div className="min-h-screen bg-surface flex flex-col">
             <Navbar />
-            <AuthModal />
 
             {/* Sub-header / Search inputs */}
             <div className="bg-white border-b border-outline-variant/10 py-4 z-10 sticky top-16 shadow-sm">

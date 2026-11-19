@@ -1,6 +1,5 @@
 import { useAppContext } from "../context/AppContext.tsx";
 import { ShieldAlert } from "lucide-react";
-import AuthModal from "./AuthModal.tsx";
 import Loader from "./Loader.tsx";
 
 interface ProtectedRouteProps {
@@ -32,7 +31,6 @@ export default function ProtectedRoute({ children, allowedRoles }: ProtectedRout
                         >
                             AUTHENTICATE
                         </button>
-                        <AuthModal />
                     </div>
                 </div>
             </div>
