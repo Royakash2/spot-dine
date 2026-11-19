@@ -252,6 +252,9 @@ export interface CreateBookingPayload {
     phone: string;
     occasion?: string;
     specialRequests?: string;
+    // new Date().getTimezoneOffset(), so the server can tell whether a slot on
+    // "today" has passed in the diner's timezone.
+    timezoneOffset?: number;
 }
 
 export interface BookingResponse {

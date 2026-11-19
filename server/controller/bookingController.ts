@@ -3,6 +3,7 @@ import mongoose, { Types, type ClientSession } from "mongoose";
 import type { AuthRequest } from "../middlewares/auth.js";
 import { Booking, generateBookingId } from "../models/Booking.js";
 import { Restaurant } from "../models/Restaurant.js";
+import { Review } from "../models/Review.js";
 import {
   badRequest,
   conflict,
@@ -16,17 +17,38 @@ import { cleanString, firstString } from "../utils/text.js";
 const SLOT_PATTERN = /^([01]\d|2[0-3]):([0-5]\d)$/;
 const MAX_GUESTS_PER_BOOKING = 20;
 
-// Booking dates are stored as calendar dates normalised to UTC midnight, so
-// "today" and slot times are compared in UTC. When restaurants get their own
-// timezone field, this helper is the only place that needs to change.
-const isSlotInThePast = (dayStart: Date, timeSlot: string): boolean => {
+const MAX_TIMEZONE_OFFSET_MINUTES = 14 * 60;
+
+// The client sends `new Date().getTimezoneOffset()` so "today" and "has this
+// slot passed" are evaluated against the diner's calendar, not the server's
+// UTC clock. The offset only affects validation; the stored date stays as the
+// calendar day the diner picked.
+const parseTimezoneOffset = (value: unknown): number => {
+  if (value === undefined || value === null || value === "") return 0;
+
+  const offset = Number(value);
+  if (!Number.isInteger(offset) || Math.abs(offset) > MAX_TIMEZONE_OFFSET_MINUTES) {
+    throw badRequest("timezoneOffset must be the client's UTC offset in minutes");
+  }
+
+  return offset;
+};
+
+// dayStart is UTC midnight of the chosen calendar day and timeSlot is a wall
+// clock time in the diner's timezone, so shift the wall clock by the offset to
+// get the real UTC instant.
+const isSlotInThePast = (
+  dayStart: Date,
+  timeSlot: string,
+  timezoneOffset: number,
+): boolean => {
   const match = SLOT_PATTERN.exec(timeSlot);
   if (!match) return false;
 
   const slotMoment = new Date(dayStart.getTime());
   slotMoment.setUTCHours(Number(match[1]), Number(match[2]), 0, 0);
 
-  return slotMoment.getTime() <= Date.now();
+  return slotMoment.getTime() + timezoneOffset * 60_000 <= Date.now();
 };
 
 const startOfUtcDay = (date: Date): Date => {
@@ -85,15 +107,20 @@ export const createBooking = async (
     throw badRequest("Invalid booking date");
   }
 
+  const timezoneOffset = parseTimezoneOffset(body.timezoneOffset);
+
   const dayStart = startOfUtcDay(requestedDate);
   const dayEnd = endOfUtcDay(requestedDate);
-  const todayStart = startOfUtcDay(new Date());
+  // The diner's current calendar day, measured from their local wall clock.
+  const todayStart = startOfUtcDay(
+    new Date(Date.now() - timezoneOffset * 60_000),
+  );
 
   if (dayStart < todayStart) {
     throw badRequest("Cannot book a date in the past");
   }
 
-  if (isSlotInThePast(dayStart, timeSlot)) {
+  if (isSlotInThePast(dayStart, timeSlot, timezoneOffset)) {
     throw badRequest(`The ${timeSlot} slot has already passed for this date`);
   }
 
@@ -226,10 +253,21 @@ export const getUserBookings = async (
     .populate("restaurant", "name slug location image cuisine priceRange")
     .sort({ date: -1 });
 
+  // Tell the client which completed bookings already have a review, so it
+  // doesn't offer "Leave Review" again (the create endpoint would return 409).
+  const reviewedBookingIds = await Review.distinct("booking", {
+    user: user._id,
+    booking: { $in: bookings.map((booking) => booking._id) },
+  });
+  const reviewed = new Set(reviewedBookingIds.map((id) => String(id)));
+
   res.status(200).json({
     success: true,
     count: bookings.length,
-    bookings,
+    bookings: bookings.map((booking) => ({
+      ...booking.toObject(),
+      hasReview: reviewed.has(String(booking._id)),
+    })),
   });
 };
 

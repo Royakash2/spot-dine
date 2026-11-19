@@ -75,6 +75,9 @@ export interface Booking {
     guestPhone: string;
     status: BookingStatus;
     specialRequests?: string;
+    // Only present on /bookings/my, where the server flags bookings the diner
+    // has already reviewed.
+    hasReview?: boolean;
     createdAt: string;
     updatedAt: string;
 }

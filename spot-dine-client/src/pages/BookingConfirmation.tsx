@@ -107,6 +107,7 @@ export default function BookingConfirmation() {
                 phone: phone.trim(),
                 occasion,
                 specialRequests: specialRequests.trim(),
+                timezoneOffset: new Date().getTimezoneOffset(),
             });
 
             setConfirmedBooking(booking);

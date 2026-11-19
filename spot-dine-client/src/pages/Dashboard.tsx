@@ -4,7 +4,6 @@ import { useAppContext } from "../context/AppContext.tsx";
 import Navbar from "../components/Navbar.tsx";
 import Footer from "../components/Footer.tsx";
 import RestaurantCard from "../components/RestaurantCard.tsx";
-import AuthModal from "../components/AuthModal.tsx";
 import ReviewModal from "../components/restaurant/ReviewModal.tsx";
 import ProfileSettingsModal from "../components/profile/ProfileSettingsModal.tsx";
 import { CalendarIcon, UsersIcon, ClockIcon, MapPinIcon, CalendarDaysIcon, Star, Settings } from "lucide-react";
@@ -33,7 +32,6 @@ export default function Dashboard() {
     const [cancellingId, setCancellingId] = useState<string | null>(null);
     const [recommendations, setRecommendations] = useState<Restaurant[] | null>(null);
     const [reviewingBooking, setReviewingBooking] = useState<Booking | null>(null);
-    const [reviewedBookingIds, setReviewedBookingIds] = useState<Set<string>>(new Set());
     const [settingsOpen, setSettingsOpen] = useState(false);
 
     useEffect(() => {
@@ -130,7 +128,6 @@ export default function Dashboard() {
     return (
         <div className="min-h-screen bg-surface flex flex-col">
             <Navbar />
-            <AuthModal />
 
             <main className="grow max-w-7xl w-full mx-auto px-6 md:px-10 py-12">
                 {/* Main Content Area */}
@@ -317,7 +314,7 @@ export default function Dashboard() {
                                                               </td>
                                                               <td className="p-4 text-right">
                                                                   {b.status === "completed" && (
-                                                                      reviewedBookingIds.has(b._id) ? (
+                                                                      b.hasReview ? (
                                                                           <span className="inline-flex items-center gap-1 text-[10px] text-green-700 font-medium">
                                                                               <Star size={11} fill="currentColor" /> Reviewed
                                                                           </span>
@@ -361,7 +358,18 @@ export default function Dashboard() {
                     booking={reviewingBooking}
                     onClose={() => setReviewingBooking(null)}
                     onSuccess={(bookingId) => {
-                        setReviewedBookingIds((prev) => new Set(prev).add(bookingId));
+                        setState((previous) =>
+                            previous.status === "ready"
+                                ? {
+                                      ...previous,
+                                      bookings: previous.bookings.map((item) =>
+                                          item._id === bookingId
+                                              ? { ...item, hasReview: true }
+                                              : item,
+                                      ),
+                                  }
+                                : previous,
+                        );
                     }}
                 />
             )}
