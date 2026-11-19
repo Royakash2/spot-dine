@@ -3,6 +3,7 @@ import { X, User as UserIcon, Lock, CheckCircle2, AlertCircle } from "lucide-rea
 import toast from "react-hot-toast";
 import { useAppContext } from "../../context/AppContext.tsx";
 import { authApi } from "../../lib/api.ts";
+import type { User } from "../../types.ts";
 
 interface ProfileSettingsModalProps {
     isOpen: boolean;
@@ -10,13 +11,23 @@ interface ProfileSettingsModalProps {
 }
 
 export default function ProfileSettingsModal({ isOpen, onClose }: ProfileSettingsModalProps) {
-    const { user, updateUser } = useAppContext();
+    const { user } = useAppContext();
+
+    if (!isOpen || !user) return null;
+
+    // The content only mounts while the modal is open, so closing and
+    // reopening always starts from the latest user details.
+    return <ProfileSettingsContent user={user} onClose={onClose} />;
+}
+
+function ProfileSettingsContent({ user, onClose }: { user: User; onClose: () => void }) {
+    const { updateUser } = useAppContext();
 
     const [activeTab, setActiveTab] = useState<"profile" | "password">("profile");
 
     // Profile state
-    const [name, setName] = useState(user?.name ?? "");
-    const [phone, setPhone] = useState(user?.phone ?? "");
+    const [name, setName] = useState(user.name);
+    const [phone, setPhone] = useState(user.phone ?? "");
     const [savingProfile, setSavingProfile] = useState(false);
 
     // Password state
@@ -25,8 +36,6 @@ export default function ProfileSettingsModal({ isOpen, onClose }: ProfileSetting
     const [confirmPassword, setConfirmPassword] = useState("");
     const [changingPassword, setChangingPassword] = useState(false);
     const [passwordError, setPasswordError] = useState<string | null>(null);
-
-    if (!isOpen || !user) return null;
 
     const handleSaveProfile = async (e: React.FormEvent) => {
         e.preventDefault();

@@ -20,9 +20,14 @@ export default function OwnerDashboard() {
     const [selectedRestaurantId, setSelectedRestaurantId] = useState<string | null>(null);
     const [isCreatingNew, setIsCreatingNew] = useState(false);
 
-    const [bookings, setBookings] = useState<Booking[]>([]);
+    // Bookings are stored with the venue they were loaded for, so switching
+    // venues can never show the previous venue's reservations while the new
+    // list is still loading.
+    const [bookingsState, setBookingsState] = useState<{
+        venueId: string | null;
+        bookings: Booking[];
+    }>({ venueId: null, bookings: [] });
     const [loading, setLoading] = useState(true);
-    const [bookingsLoading, setBookingsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [reloadKey, setReloadKey] = useState(0);
     const [updatingBookingId, setUpdatingBookingId] = useState<string | null>(null);
@@ -78,7 +83,12 @@ export default function OwnerDashboard() {
         bookingApi
             .forRestaurant(currentRestaurant._id, { limit: 100 })
             .then((list) => {
-                if (active) setBookings(list.bookings);
+                if (active) {
+                    setBookingsState({
+                        venueId: currentRestaurant._id,
+                        bookings: list.bookings,
+                    });
+                }
             })
             .catch((err: unknown) => {
                 if (active) {
@@ -87,10 +97,10 @@ export default function OwnerDashboard() {
                             ? err.message
                             : "Failed to load bookings for this restaurant.",
                     );
+                    // Mark the venue as loaded with an empty list so the
+                    // spinner stops; the toast explains what happened.
+                    setBookingsState({ venueId: currentRestaurant._id, bookings: [] });
                 }
-            })
-            .finally(() => {
-                if (active) setBookingsLoading(false);
             });
 
         return () => {
@@ -98,8 +108,16 @@ export default function OwnerDashboard() {
         };
     }, [currentRestaurant]);
 
+    const bookingsLoading =
+        currentRestaurant?.status === "approved" &&
+        bookingsState.venueId !== currentRestaurant._id;
+
     const activeBookings =
-        currentRestaurant && currentRestaurant.status === "approved" ? bookings : [];
+        currentRestaurant &&
+        currentRestaurant.status === "approved" &&
+        bookingsState.venueId === currentRestaurant._id
+            ? bookingsState.bookings
+            : [];
 
     const handleRetry = () => {
         setLoading(true);
@@ -131,11 +149,18 @@ export default function OwnerDashboard() {
 
         try {
             await action(booking._id);
-            setBookings((previous) =>
-                previous.map((item) =>
-                    item._id === booking._id ? { ...item, status: nextStatus } : item,
-                ),
-            );
+            setBookingsState((previous) => {
+                if (!currentRestaurant || previous.venueId !== currentRestaurant._id) {
+                    return previous;
+                }
+
+                return {
+                    ...previous,
+                    bookings: previous.bookings.map((item) =>
+                        item._id === booking._id ? { ...item, status: nextStatus } : item,
+                    ),
+                };
+            });
             toast.success(`Booking ${nextStatus}.`);
         } catch (err: unknown) {
             toast.error(err instanceof Error ? err.message : "Could not update the booking.");

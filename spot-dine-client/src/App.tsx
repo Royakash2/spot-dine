@@ -2,6 +2,7 @@ import { lazy, Suspense } from "react";
 import { Routes, Route } from "react-router-dom";
 import ProtectedRoute from "./components/ProtectedRoute.tsx";
 import Loader from "./components/Loader.tsx";
+import AuthModal from "./components/AuthModal.tsx";
 import { Toaster } from "react-hot-toast";
 
 const Home = lazy(() => import("./pages/Home.tsx"));
@@ -30,6 +31,9 @@ export default function App() {
                     },
                 }}
             />
+            {/* Mounted once for the whole app so any page (including 404) can
+                open the sign-in dialog. */}
+            <AuthModal />
             <Suspense fallback={<Loader />}>
                 <Routes>
                     <Route path="/" element={<Home />} />
